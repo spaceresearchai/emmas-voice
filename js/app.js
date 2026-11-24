@@ -17,7 +17,7 @@ import {
 } from './storage.js';
 import { SpeechEngine } from './speech.js';
 import { ArticulationCoach } from './coach.js';
-import { LipTracker } from './lip-tracker.js';
+import { LipTracker } from './lip-tracker.js?v=2';
 import { CelebrationOverlay } from './celebration.js';
 
 const LINE_STYLES = ['clean', 'detailed', 'minimal'];

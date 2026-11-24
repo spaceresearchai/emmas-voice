@@ -41,8 +41,12 @@ export class LipTracker {
     this.mode = 'idle'; // 'idle' | 'camera' | 'demo'
     this.stream = null;
     this.faceLandmarker = null;
+    this.filesetResolver = null;
+    this.activeDelegate = 'GPU';
+    this.consecutiveFrameErrors = 0;
     this.rafId = null;
-    this.lastVideoTime = -1;
+    this.lastDetectTs = 0; // Strictly monotonic ms across FaceLandmarker lifetime
+    this.lastFrameDetectWall = 0;
 
     // Configurable settings
     this.settings = {
@@ -127,9 +131,10 @@ export class LipTracker {
     this.mode = 'camera';
     this.recalibrate();
     this.lastFrameTs = performance.now();
+    this.lastFrameDetectWall = 0;
     this.onModelLoading(false);
     this.onStatusChange('tracking', 'Watching lips');
-    this._loop(performance.now());
+    this.rafId = requestAnimationFrame((ts) => this._loop(ts));
   }
 
   startDemo() {
@@ -140,7 +145,7 @@ export class LipTracker {
     this.demoBurstUntil = performance.now() + 1600;
     this.demoAutoNext = performance.now() + 5200;
     this.onStatusChange('tracking', 'Demo camera active');
-    this._loop(performance.now());
+    this.rafId = requestAnimationFrame((ts) => this._loop(ts));
   }
 
   stop() {
@@ -168,34 +173,10 @@ export class LipTracker {
       try {
         const vision = await import(cdn.moduleUrl);
         const { FaceLandmarker, FilesetResolver } = vision;
-        const filesetResolver = await FilesetResolver.forVisionTasks(cdn.wasmBase);
+        this.FaceLandmarkerClass = FaceLandmarker;
+        this.filesetResolver = await FilesetResolver.forVisionTasks(cdn.wasmBase);
 
-        try {
-          this.faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-            baseOptions: {
-              modelAssetPath: FACE_LANDMARKER_MODEL,
-              delegate: 'GPU',
-            },
-            runningMode: 'VIDEO',
-            numFaces: 1,
-            minFaceDetectionConfidence: 0.45,
-            minFacePresenceConfidence: 0.45,
-            minTrackingConfidence: 0.45,
-          });
-        } catch {
-          // Graceful CPU fallback for tablets with restricted WebGL
-          this.faceLandmarker = await FaceLandmarker.createFromOptions(filesetResolver, {
-            baseOptions: {
-              modelAssetPath: FACE_LANDMARKER_MODEL,
-              delegate: 'CPU',
-            },
-            runningMode: 'VIDEO',
-            numFaces: 1,
-            minFaceDetectionConfidence: 0.45,
-            minFacePresenceConfidence: 0.45,
-            minTrackingConfidence: 0.45,
-          });
-        }
+        await this._createLandmarker('GPU');
         return;
       } catch (err) {
         lastErr = err;
@@ -207,6 +188,47 @@ export class LipTracker {
     throw new Error(
       `Could not load the lip-tracking model (${lastErr?.message || 'network error'}). Check internet connection or try Demo Camera.`
     );
+  }
+
+  async _createLandmarker(preferredDelegate) {
+    const commonOptions = {
+      runningMode: 'VIDEO',
+      numFaces: 1,
+      outputFaceBlendshapes: true,
+      minFaceDetectionConfidence: 0.35,
+      minFacePresenceConfidence: 0.35,
+      minTrackingConfidence: 0.35,
+    };
+
+    if (this.faceLandmarker && typeof this.faceLandmarker.close === 'function') {
+      try { this.faceLandmarker.close(); } catch { /* ignore */ }
+    }
+
+    try {
+      this.faceLandmarker = await this.FaceLandmarkerClass.createFromOptions(this.filesetResolver, {
+        baseOptions: {
+          modelAssetPath: FACE_LANDMARKER_MODEL,
+          delegate: preferredDelegate,
+        },
+        ...commonOptions,
+      });
+      this.activeDelegate = preferredDelegate;
+      this.consecutiveFrameErrors = 0;
+    } catch (err) {
+      if (preferredDelegate === 'GPU') {
+        this.faceLandmarker = await this.FaceLandmarkerClass.createFromOptions(this.filesetResolver, {
+          baseOptions: {
+            modelAssetPath: FACE_LANDMARKER_MODEL,
+            delegate: 'CPU',
+          },
+          ...commonOptions,
+        });
+        this.activeDelegate = 'CPU';
+        this.consecutiveFrameErrors = 0;
+      } else {
+        throw err;
+      }
+    }
   }
 
   _syncCanvasSize() {
@@ -222,30 +244,60 @@ export class LipTracker {
 
   _loop(ts) {
     if (this.mode === 'idle') return;
-    const dt = Math.min(60, Math.max(8, ts - this.lastFrameTs));
-    this.lastFrameTs = ts;
+    const now = performance.now();
+    const dt = Math.min(60, Math.max(8, now - this.lastFrameTs));
+    this.lastFrameTs = now;
 
-    this._syncCanvasSize();
+    try {
+      this._syncCanvasSize();
 
-    if (this.mode === 'camera') {
-      this._processCameraFrame(ts, dt);
-    } else if (this.mode === 'demo') {
-      this._processDemoFrame(ts, dt);
+      if (this.mode === 'camera') {
+        this._processCameraFrame(now, dt);
+      } else if (this.mode === 'demo') {
+        this._processDemoFrame(now, dt);
+      }
+      this.consecutiveFrameErrors = 0;
+    } catch (err) {
+      this.consecutiveFrameErrors++;
+      console.warn('Lip tracking frame error (recovering):', err);
+      if (this.consecutiveFrameErrors >= 3 && this.activeDelegate === 'GPU' && this.filesetResolver) {
+        this.consecutiveFrameErrors = 0;
+        this.activeDelegate = 'CPU';
+        this.onModelLoading(true, 'Switching to high-compatibility CPU tracking…');
+        this._createLandmarker('CPU')
+          .catch((e) => console.error('CPU fallback failed:', e))
+          .finally(() => this.onModelLoading(false));
+      }
     }
 
-    this.rafId = requestAnimationFrame((nextTs) => this._loop(nextTs));
+    if (this.mode !== 'idle') {
+      this.rafId = requestAnimationFrame((nextTs) => this._loop(nextTs));
+    }
   }
 
-  _processCameraFrame(ts, dt) {
+  _processCameraFrame(now, dt) {
     const ctx = this.ctx;
     const cw = this.canvasEl.width;
     const ch = this.canvasEl.height;
 
-    if (!this.faceLandmarker || this.videoEl.readyState < 2) return;
-    if (this.videoEl.currentTime === this.lastVideoTime) return;
-    this.lastVideoTime = this.videoEl.currentTime;
+    if (
+      !this.faceLandmarker ||
+      this.videoEl.readyState < 2 ||
+      this.videoEl.videoWidth === 0 ||
+      this.videoEl.videoHeight === 0
+    ) {
+      return;
+    }
 
-    const result = this.faceLandmarker.detectForVideo(this.videoEl, ts);
+    // Throttle detection cleanly (~40fps max) without relying on video.currentTime
+    if (now - this.lastFrameDetectWall < 24) return;
+    this.lastFrameDetectWall = now;
+
+    // MediaPipe VIDEO mode strictly requires monotonically increasing integer ms timestamps
+    const detectTs = Math.max(this.lastDetectTs + 1, Math.floor(now));
+    this.lastDetectTs = detectTs;
+
+    const result = this.faceLandmarker.detectForVideo(this.videoEl, detectTs);
     ctx.clearRect(0, 0, cw, ch);
 
     if (!result.faceLandmarks || result.faceLandmarks.length === 0) {
@@ -264,8 +316,18 @@ export class LipTracker {
     }
 
     const landmarks = result.faceLandmarks[0];
+    const blendshapes = this._extractBlendshapes(result.faceBlendshapes?.[0]?.categories);
     const mapper = this._createCoverMapper(cw, ch, this.videoEl.videoWidth, this.videoEl.videoHeight);
-    this._evaluateAndDrawLandmarks(landmarks, mapper, ts, dt);
+    this._evaluateAndDrawLandmarks(landmarks, mapper, now, dt, blendshapes);
+  }
+
+  _extractBlendshapes(categories) {
+    if (!categories || categories.length === 0) return null;
+    const map = {};
+    for (const c of categories) {
+      map[c.categoryName] = c.score;
+    }
+    return map;
   }
 
   _processDemoFrame(ts, dt) {
@@ -451,7 +513,7 @@ export class LipTracker {
     return 0.72 - s * 0.05;
   }
 
-  _evaluateAndDrawLandmarks(landmarks, mapPt, ts, dt) {
+  _evaluateAndDrawLandmarks(landmarks, mapPt, ts, dt, blendshapes = null) {
     const pLeftEye = landmarks[33];
     const pRightEye = landmarks[263];
     const pTopInner = landmarks[13];
@@ -465,12 +527,22 @@ export class LipTracker {
       return;
     }
 
-    const eyeDist = Math.max(0.02, Math.hypot(pRightEye.x - pLeftEye.x, pRightEye.y - pLeftEye.y));
-    const openness = Math.hypot(pBotInner.x - pTopInner.x, pBotInner.y - pTopInner.y) / eyeDist;
-    const outerH = pTopOuter && pBotOuter
-      ? Math.hypot(pBotOuter.x - pTopOuter.x, pBotOuter.y - pTopOuter.y) / eyeDist
+    // Use aspect-ratio-accurate pixel coordinates for true geometric measurements
+    const mLeftEye = mapPt(pLeftEye);
+    const mRightEye = mapPt(pRightEye);
+    const mTopInner = mapPt(pTopInner);
+    const mBotInner = mapPt(pBotInner);
+    const mLeftCorner = mapPt(pLeftCorner);
+    const mRightCorner = mapPt(pRightCorner);
+    const mTopOuter = pTopOuter ? mapPt(pTopOuter) : null;
+    const mBotOuter = pBotOuter ? mapPt(pBotOuter) : null;
+
+    const eyeDist = Math.max(8, Math.hypot(mRightEye.x - mLeftEye.x, mRightEye.y - mLeftEye.y));
+    const openness = Math.hypot(mBotInner.x - mTopInner.x, mBotInner.y - mTopInner.y) / eyeDist;
+    const outerH = mTopOuter && mBotOuter
+      ? Math.hypot(mBotOuter.x - mTopOuter.x, mBotOuter.y - mTopOuter.y) / eyeDist
       : openness + 0.14;
-    const width = Math.hypot(pRightCorner.x - pLeftCorner.x, pRightCorner.y - pLeftCorner.y) / eyeDist;
+    const width = Math.hypot(mRightCorner.x - mLeftCorner.x, mRightCorner.y - mLeftCorner.y) / eyeDist;
 
     const faceCx = (pLeftEye.x + pRightEye.x) * 0.5;
     const faceCy = (pLeftEye.y + pRightEye.y) * 0.5;
@@ -488,14 +560,14 @@ export class LipTracker {
         ? width
         : this.baseline.width * 0.8 + width * 0.2;
       this.baseline.samples++;
-      if (this.baseline.samples >= 8) {
+      if (this.baseline.samples >= 6) {
         this.baseline.ready = true;
       }
-    } else if (headJump < 0.02 && Math.abs(openness - this.baseline.openness) < 0.045) {
+    } else if (headJump < 0.02 && Math.abs(openness - this.baseline.openness) < 0.04) {
       // Very gentle drift adaptation when mouth is resting
-      this.baseline.openness = this.baseline.openness * 0.985 + openness * 0.015;
-      this.baseline.outerH = this.baseline.outerH * 0.985 + outerH * 0.015;
-      this.baseline.width = this.baseline.width * 0.985 + width * 0.015;
+      this.baseline.openness = this.baseline.openness * 0.988 + openness * 0.012;
+      this.baseline.outerH = this.baseline.outerH * 0.988 + outerH * 0.012;
+      this.baseline.width = this.baseline.width * 0.988 + width * 0.012;
     }
 
     const openDelta = Math.max(0, openness - this.baseline.openness);
@@ -507,31 +579,40 @@ export class LipTracker {
 
     this.prevMetrics = { openness, width, cx: faceCx, cy: faceCy };
 
+    // Neural Face Blendshapes boost when available (from MediaPipe FaceLandmarker)
+    const bsJawOpen = blendshapes?.jawOpen || 0;
+    const bsPucker = blendshapes?.mouthPucker || 0;
+    const bsFunnel = blendshapes?.mouthFunnel || 0;
+    const bsPress = ((blendshapes?.mouthPressLeft || 0) + (blendshapes?.mouthPressRight || 0)) * 0.5;
+    const bsSmile = ((blendshapes?.mouthSmileLeft || 0) + (blendshapes?.mouthSmileRight || 0)) * 0.5;
+
     // Track lip-close press for bilabial words (Mama, More, Ball, Bye)
-    if (pressDelta > 0.035 || openness < 0.025) {
+    if (pressDelta > 0.03 || bsPress > 0.22 || openness < 0.035) {
       this.sawClosedBeforeOpen = true;
     }
 
     // Compute normalized activity score (0..1)
     let rawScore = 0;
-    if (headJump < 0.055) {
+    if (headJump < 0.065) {
       if (this.settings.detectionMode === 'match') {
         const shape = this.settings.targetShape;
         if (shape === 'round') {
-          const roundBoost = widthChange < -0.02 ? Math.abs(widthChange) * 4.5 : 0;
-          rawScore = openDelta * 3.1 + roundBoost;
+          const roundBoost = (widthChange < -0.02 ? Math.abs(widthChange) * 4.2 : 0) + (bsPucker + bsFunnel) * 0.65;
+          rawScore = Math.max(openDelta * 3.0, bsJawOpen * 1.1) + roundBoost;
         } else if (shape === 'smile') {
-          const smileBoost = widthChange > 0.02 ? widthChange * 4.6 : 0;
-          rawScore = openDelta * 2.2 + smileBoost;
+          const smileBoost = (widthChange > 0.02 ? widthChange * 4.4 : 0) + bsSmile * 0.7;
+          rawScore = Math.max(openDelta * 2.2, bsJawOpen * 0.85) + smileBoost;
         } else if (shape === 'bilabial') {
-          const cycleBoost = this.sawClosedBeforeOpen && openDelta > 0.05 ? 0.22 : 0;
-          rawScore = openDelta * 3.8 + pressDelta * 2.4 + cycleBoost;
+          const cycleBoost = this.sawClosedBeforeOpen && (openDelta > 0.045 || bsJawOpen > 0.14) ? 0.25 : 0;
+          rawScore = Math.max(openDelta * 3.8, bsJawOpen * 1.3) + pressDelta * 2.2 + bsPress * 0.6 + cycleBoost;
         } else {
-          rawScore = openDelta * 4.5;
+          rawScore = Math.max(openDelta * 4.4, bsJawOpen * 1.6);
         }
       } else {
         // Default "Encourage Any Effort": rewards opening, pressing, rounding, or smiling!
-        rawScore = openDelta * 4.2 + pressDelta * 2.2 + absWidthDelta * 2.4 + Math.min(0.18, vel * 1.8);
+        const geoScore = openDelta * 4.2 + pressDelta * 2.2 + absWidthDelta * 2.2 + Math.min(0.18, vel * 1.8);
+        const bsScore = bsJawOpen * 1.55 + (bsPucker + bsFunnel) * 0.65 + bsPress * 0.7 + bsSmile * 0.45;
+        rawScore = Math.max(geoScore, bsScore);
       }
     }
 
@@ -576,7 +657,7 @@ export class LipTracker {
       }
     }
 
-    const openPct = Math.min(100, Math.round(openDelta * 320));
+    const openPct = Math.min(100, Math.round(Math.max(openDelta * 320, bsJawOpen * 130)));
     this._drawTrackingOverlay(landmarks, mapPt, visualState, openPct);
 
     this.onMetrics({
