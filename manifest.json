@@ -1,0 +1,18 @@
+{
+  "name": "Emma's Voice — Speech & Lip Coach",
+  "short_name": "Emma's Voice",
+  "description": "Gentle tablet speech learning app with real-time lip movement tracking, visual articulation coach, and instant voice reinforcement.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F5F7FB",
+  "theme_color": "#2563EB",
+  "icons": [
+    {
+      "src": "assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
