@@ -15,8 +15,8 @@ import {
   getWordVideo,
   deleteWordVideo,
   listSavedVideoWordIds,
-} from './storage.js?v=3';
-import { SpeechEngine } from './speech.js?v=3';
+} from './storage.js?v=4';
+import { SpeechEngine, NEURAL_VOICES } from './speech.js?v=4';
 import { ArticulationCoach } from './coach.js?v=3';
 import { LipTracker } from './lip-tracker.js?v=3';
 import { CelebrationOverlay } from './celebration.js?v=3';
@@ -135,6 +135,11 @@ const dom = {
 
   childNameInput: document.getElementById('childNameInput'),
   languageSelect: document.getElementById('languageSelect'),
+  voiceEngineSelect: document.getElementById('voiceEngineSelect'),
+  neuralVoiceStatusText: document.getElementById('neuralVoiceStatusText'),
+  neuralVoiceGroup: document.getElementById('neuralVoiceGroup'),
+  neuralVoiceSelect: document.getElementById('neuralVoiceSelect'),
+  browserVoiceGroup: document.getElementById('browserVoiceGroup'),
   voiceSelect: document.getElementById('voiceSelect'),
   speechRateRange: document.getElementById('speechRateRange'),
   speechRateLabel: document.getElementById('speechRateLabel'),
@@ -363,6 +368,10 @@ function applySettingsToUI() {
 
   dom.childNameInput.value = s.childName;
   dom.languageSelect.value = s.language;
+  dom.voiceEngineSelect.value = s.voiceEngine || 'neural';
+  dom.neuralVoiceSelect.value = s.neuralVoiceId || speech.getDefaultNeuralVoiceForLang(s.language);
+  dom.neuralVoiceGroup.classList.toggle('hidden', (s.voiceEngine || 'neural') !== 'neural');
+  dom.browserVoiceGroup.classList.toggle('hidden', (s.voiceEngine || 'neural') === 'neural');
   dom.speechRateRange.value = String(s.speechRate);
   dom.speechRateLabel.textContent = `${Number(s.speechRate).toFixed(2)}×`;
   dom.chimeSetting.checked = Boolean(s.chimeEnabled);
@@ -1059,9 +1068,22 @@ function bindEvents() {
   dom.languageSelect.addEventListener('change', (e) => {
     state.settings.language = e.target.value;
     state.settings.voiceURI = '';
+    state.settings.neuralVoiceId = speech.getDefaultNeuralVoiceForLang(e.target.value);
     saveSettings(state.settings);
     applySettingsToUI();
     populateVoices(speech.voices);
+  });
+
+  dom.voiceEngineSelect.addEventListener('change', (e) => {
+    state.settings.voiceEngine = e.target.value;
+    saveSettings(state.settings);
+    applySettingsToUI();
+  });
+
+  dom.neuralVoiceSelect.addEventListener('change', (e) => {
+    state.settings.neuralVoiceId = e.target.value;
+    saveSettings(state.settings);
+    applySettingsToUI();
   });
 
   dom.voiceSelect.addEventListener('change', (e) => {
@@ -1193,6 +1215,29 @@ function bindEvents() {
 async function init() {
   const savedIds = await listSavedVideoWordIds();
   state.savedVideoIds = new Set(savedIds);
+
+  // Populate Natural AI Voices dropdown
+  dom.neuralVoiceSelect.innerHTML = '';
+  NEURAL_VOICES.forEach((v) => {
+    const opt = document.createElement('option');
+    opt.value = v.id;
+    opt.textContent = v.label;
+    dom.neuralVoiceSelect.appendChild(opt);
+  });
+
+  speech.onNeuralStatus((status, detail) => {
+    if (!dom.neuralVoiceStatusText) return;
+    if (status === 'ready') {
+      dom.neuralVoiceStatusText.textContent = '✅ Natural AI voice loaded & cached locally!';
+      dom.neuralVoiceStatusText.style.color = '#059669';
+    } else if (status === 'loading') {
+      dom.neuralVoiceStatusText.textContent = `🎙️ ${detail || 'Loading natural AI voice…'}`;
+      dom.neuralVoiceStatusText.style.color = '#2563eb';
+    } else if (status === 'error') {
+      dom.neuralVoiceStatusText.textContent = '⚠️ Offline or blocked — using device browser voice.';
+      dom.neuralVoiceStatusText.style.color = '#d97706';
+    }
+  });
 
   speech.onVoicesChanged(populateVoices);
   bindEvents();

@@ -20,8 +20,10 @@ export const DEFAULT_SETTINGS = {
   calmMode: false,
   childLock: true,
   language: 'en-US',
+  voiceEngine: 'neural',      // 'neural' (Piper VITS WASM) | 'browser'
+  neuralVoiceId: 'en_US-amy-medium',
   voiceURI: '',
-  speechRate: 0.85,
+  speechRate: 0.92,
   chimeEnabled: true,
   praiseEnabled: false,
   coachLines: true,

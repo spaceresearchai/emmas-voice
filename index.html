@@ -345,7 +345,21 @@
           </div>
 
           <div class="setting-group">
-            <label class="setting-label" for="voiceSelect">Voice</label>
+            <label class="setting-label" for="voiceEngineSelect">Voice Quality Engine</label>
+            <select id="voiceEngineSelect" class="input-control">
+              <option value="neural">Natural Human AI Voice (Recommended — Warm &amp; Lifelike)</option>
+              <option value="browser">Device Browser Voice (Instant Offline)</option>
+            </select>
+            <p class="setting-help" id="neuralVoiceStatusText">🎙️ Preparing natural AI voice…</p>
+          </div>
+
+          <div class="setting-group" id="neuralVoiceGroup">
+            <label class="setting-label" for="neuralVoiceSelect">Natural AI Voice</label>
+            <select id="neuralVoiceSelect" class="input-control"></select>
+          </div>
+
+          <div class="setting-group" id="browserVoiceGroup">
+            <label class="setting-label" for="voiceSelect">Device Fallback Voice</label>
             <select id="voiceSelect" class="input-control"></select>
           </div>
 
@@ -477,6 +491,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=3"></script>
+  <script type="module" src="js/app.js?v=4"></script>
 </body>
 </html>
