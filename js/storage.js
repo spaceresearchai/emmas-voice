@@ -11,10 +11,11 @@ const DB_VERSION = 1;
 const STORE_VIDEOS = 'wordVideos';
 
 export const DEFAULT_SETTINGS = {
+  practiceMode: 'moves',      // 'moves' (default) | 'words'
   childName: 'Emma',
   detectionMode: 'encourage', // 'encourage' | 'match'
   sensitivity: 6,             // 1..10 (higher = easier to trigger)
-  cooldownSec: 2.5,           // 1.2..5.0
+  cooldownSec: 2.6,           // 1.2..5.0
   lineStyle: 'clean',         // 'clean' | 'detailed' | 'minimal'
   calmMode: false,
   childLock: true,

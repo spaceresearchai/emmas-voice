@@ -1,20 +1,34 @@
 // ============================================================================
-// Watch & Copy Articulation Coach (60fps Phoneme Lip Model + Parent Video)
+// Amplified Watch & Copy Oral-Motor & Speech Articulation Coach (60fps)
+// Shows enlarged, crystal-clear Lips, Teeth, Cheeks, Tongue & Animated Arrows
 // ============================================================================
 
-const VISEME_SHAPES = {
-  // open: vertical aperture (0..1), width: horizontal stretch (0.55..1.3),
-  // press: lip compression for M/B/P (0..1), tongue: tongue tip lift (0..1),
-  // teethLip: top teeth touching lower lip for F/V (0..1), jaw: jaw drop (0..1)
-  rest:       { open: 0.04, width: 0.96, press: 0.0, tongue: 0.0, teethLip: 0.0, jaw: 0.0 },
-  closed:     { open: 0.00, width: 0.92, press: 1.0, tongue: 0.0, teethLip: 0.0, jaw: 0.0 },
-  openWide:   { open: 0.92, width: 1.04, press: 0.0, tongue: 0.1, teethLip: 0.0, jaw: 0.95 },
-  openMid:    { open: 0.52, width: 1.02, press: 0.0, tongue: 0.15, teethLip: 0.0, jaw: 0.50 },
-  roundTight: { open: 0.34, width: 0.56, press: 0.15, tongue: 0.0, teethLip: 0.0, jaw: 0.30 },
-  roundOpen:  { open: 0.72, width: 0.68, press: 0.0, tongue: 0.0, teethLip: 0.0, jaw: 0.68 },
-  smile:      { open: 0.24, width: 1.24, press: 0.0, tongue: 0.15, teethLip: 0.0, jaw: 0.22 },
-  tongueUp:   { open: 0.38, width: 0.98, press: 0.0, tongue: 1.0, teethLip: 0.0, jaw: 0.36 },
-  teethLip:   { open: 0.10, width: 1.02, press: 0.2, tongue: 0.0, teethLip: 1.0, jaw: 0.12 },
+const POSE_SHAPES = {
+  // open: vertical opening (0..1.1), width: horizontal width (0.50..1.35),
+  // press: lip press (0..1), pucker: kiss protrusion (0..1),
+  // cheekPuff: cheek inflation (0..1),
+  // tongueIn: internal tip lift for L/T/D (0..1),
+  // tongueOut: external protrusion (0..1), tongueX: (-1 left .. +1 right), tongueY: (-1 up .. +1 down)
+  // teethLip: top teeth on bottom lip (0..1), jaw: jaw drop (0..1.1)
+  rest:            { open: 0.04, width: 0.96, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.0 },
+  closed:          { open: 0.00, width: 0.90, press: 1.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.0 },
+  openWide:        { open: 0.90, width: 1.04, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.1, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.92 },
+  openBig:         { open: 1.08, width: 1.06, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 1.08 },
+  openMid:         { open: 0.54, width: 1.00, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.15, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.52 },
+  roundTight:      { open: 0.32, width: 0.56, press: 0.1, pucker: 0.75, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.28 },
+  kissPucker:      { open: 0.22, width: 0.48, press: 0.2, pucker: 1.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.22 },
+  roundOpen:       { open: 0.70, width: 0.68, press: 0.0, pucker: 0.45, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.66 },
+  smile:           { open: 0.24, width: 1.24, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.1, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.20 },
+  bigSmile:        { open: 0.34, width: 1.36, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.26 },
+  tongueUp:        { open: 0.44, width: 0.98, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 1.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.42 },
+  teethLip:        { open: 0.10, width: 1.02, press: 0.2, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 1.0, jaw: 0.12 },
+  // Explicit Tongue & Cheek Oral-Motor Poses!
+  tongueOut:       { open: 0.72, width: 1.02, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 1.0, tongueX: 0.0, tongueY: 0.28, teethLip: 0.0, jaw: 0.68 },
+  tongueLeft:      { open: 0.66, width: 1.02, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.92, tongueX: -0.92, tongueY: 0.12, teethLip: 0.0, jaw: 0.62 },
+  tongueRight:     { open: 0.66, width: 1.02, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.92, tongueX: 0.92, tongueY: 0.12, teethLip: 0.0, jaw: 0.62 },
+  tongueReachUp:   { open: 0.74, width: 1.00, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 0.95, tongueX: 0.0, tongueY: -0.95, teethLip: 0.0, jaw: 0.68 },
+  tongueReachDown: { open: 0.78, width: 1.00, press: 0.0, pucker: 0.0, cheekPuff: 0.0, tongueIn: 0.0, tongueOut: 1.08, tongueX: 0.0, tongueY: 1.0, teethLip: 0.0, jaw: 0.76 },
+  cheekPuff:       { open: 0.00, width: 0.84, press: 0.9, pucker: 0.25, cheekPuff: 1.0, tongueIn: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, teethLip: 0.0, jaw: 0.08 },
 };
 
 export class ArticulationCoach {
@@ -25,7 +39,8 @@ export class ArticulationCoach {
     this.syllableStripEl = syllableStripEl;
     this.modeBadgeEl = modeBadgeEl;
 
-    this.word = null;
+    this.item = null; // Either a Move or a Word object
+    this.isMoveMode = true;
     this.showLines = true;
     this.slowMode = false;
     this.loopEnabled = true;
@@ -38,21 +53,38 @@ export class ArticulationCoach {
     this.elapsedMs = 0;
     this.loopWaitMs = 0;
     this.lastFrameTs = 0;
+    this.clockSec = 0;
     this.blinkTimer = 2800;
     this.blinkPhase = 0;
-    this.activeSylIndex = -1;
+    this.activeStepIdx = -1;
 
-    this.currentPose = { ...VISEME_SHAPES.rest };
-    this.targetPose = { ...VISEME_SHAPES.rest };
+    this.currentPose = { ...POSE_SHAPES.rest };
+    this.targetPose = { ...POSE_SHAPES.rest };
+
+    this._resizeObserver = new ResizeObserver(() => this._syncSize());
+    this._resizeObserver.observe(this.canvas);
+    this._syncSize();
 
     this._raf = requestAnimationFrame((ts) => this._tick(ts));
   }
 
-  setWord(word, parentVideoBlob = null) {
-    this.word = word;
+  _syncSize() {
+    const rect = this.canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.max(360, Math.round(rect.width * dpr));
+    const h = Math.max(260, Math.round(rect.height * dpr));
+    if (this.canvas.width !== w || this.canvas.height !== h) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+  }
+
+  setItem(item, { isMoveMode = true, parentVideoBlob = null } = {}) {
+    this.item = item;
+    this.isMoveMode = isMoveMode;
     this.elapsedMs = 0;
     this.loopWaitMs = 0;
-    this.activeSylIndex = -1;
+    this.activeStepIdx = -1;
 
     if (this.currentVideoUrl) {
       URL.revokeObjectURL(this.currentVideoUrl);
@@ -76,11 +108,11 @@ export class ArticulationCoach {
       this.videoEl.removeAttribute('src');
       this.videoEl.classList.add('hidden');
       this.canvas.classList.remove('hidden');
-      this.modeBadgeEl.textContent = 'Articulation Coach';
+      this.modeBadgeEl.textContent = isMoveMode ? 'Lips & Tongue Coach' : 'Speech Coach';
       this.modeBadgeEl.classList.remove('parent-video');
     }
 
-    this._renderSyllablePills();
+    this._renderStepPills();
     this.playOnce();
   }
 
@@ -120,21 +152,21 @@ export class ArticulationCoach {
     this.loopWaitMs = 0;
   }
 
-  _renderSyllablePills() {
+  _renderStepPills() {
     this.syllableStripEl.innerHTML = '';
-    if (!this.word || !this.word.syllables) return;
-    this.word.syllables.forEach((syl, idx) => {
+    const labels = this.item?.steps || this.item?.syllables || [];
+    labels.forEach((txt, idx) => {
       const span = document.createElement('span');
       span.className = 'syllable-pill';
       span.dataset.idx = String(idx);
-      span.textContent = syl;
+      span.textContent = txt;
       this.syllableStripEl.appendChild(span);
     });
   }
 
-  _highlightSyllable(idx) {
-    if (idx === this.activeSylIndex) return;
-    this.activeSylIndex = idx;
+  _highlightStep(idx) {
+    if (idx === this.activeStepIdx) return;
+    this.activeStepIdx = idx;
     const pills = this.syllableStripEl.querySelectorAll('.syllable-pill');
     pills.forEach((pill, i) => {
       pill.classList.toggle('active', i === idx);
@@ -144,8 +176,10 @@ export class ArticulationCoach {
   _tick(ts) {
     const dt = this.lastFrameTs ? Math.min(50, ts - this.lastFrameTs) : 16;
     this.lastFrameTs = ts;
+    this.clockSec += dt / 1000;
 
     if (!this.hasParentVideo) {
+      this._syncSize();
       this._updateAnimation(dt);
       this._drawCoach();
     }
@@ -153,38 +187,39 @@ export class ArticulationCoach {
   }
 
   _updateAnimation(dt) {
-    // Gentle natural eye blinking
+    // Gentle blinking
     this.blinkTimer -= dt;
     if (this.blinkTimer <= 0) {
       this.blinkPhase += dt / 160;
       if (this.blinkPhase >= 1) {
         this.blinkPhase = 0;
-        this.blinkTimer = 2600 + Math.random() * 2400;
+        this.blinkTimer = 2500 + Math.random() * 2400;
       }
     }
 
     const speed = this.slowMode ? 0.5 : 1.0;
-    const timeline = this.word?.timeline || [{ v: 'rest', dur: 400, syl: -1 }];
+    const timeline = this.item?.timeline || [{ v: 'rest', dur: 400, step: -1 }];
 
     if (this.playing) {
       this.elapsedMs += dt * speed;
       let acc = 0;
       let found = null;
-      for (const step of timeline) {
-        acc += step.dur;
+      for (const frame of timeline) {
+        acc += frame.dur;
         if (this.elapsedMs <= acc) {
-          found = step;
+          found = frame;
           break;
         }
       }
       if (found) {
-        this.targetPose = VISEME_SHAPES[found.v] || VISEME_SHAPES.rest;
-        this._highlightSyllable(found.syl);
+        this.targetPose = POSE_SHAPES[found.v] || POSE_SHAPES.rest;
+        const idx = found.step !== undefined ? found.step : (found.syl ?? -1);
+        this._highlightStep(idx);
       } else {
         this.playing = false;
-        this.targetPose = VISEME_SHAPES.rest;
-        this._highlightSyllable(-1);
-        this.loopWaitMs = 1500;
+        this.targetPose = POSE_SHAPES.rest;
+        this._highlightStep(-1);
+        this.loopWaitMs = this.isMoveMode ? 900 : 1350;
       }
     } else if (this.loopEnabled) {
       this.loopWaitMs -= dt;
@@ -194,8 +229,8 @@ export class ArticulationCoach {
       }
     }
 
-    // Smooth organic easing toward target viseme
-    const alpha = Math.min(1, (dt / 1000) * (this.slowMode ? 9 : 16));
+    // Smooth organic spring interpolation
+    const alpha = Math.min(1, (dt / 1000) * (this.slowMode ? 6.5 : 11.5));
     for (const k of Object.keys(this.currentPose)) {
       this.currentPose[k] += (this.targetPose[k] - this.currentPose[k]) * alpha;
     }
@@ -209,134 +244,156 @@ export class ArticulationCoach {
 
     ctx.clearRect(0, 0, w, h);
 
-    // Warm soft studio backdrop
-    const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
-    bgGrad.addColorStop(0, '#dbeafe');
-    bgGrad.addColorStop(1, '#f0f9ff');
+    // Soft bright studio gradient
+    const bgGrad = ctx.createRadialGradient(w * 0.5, h * 0.45, w * 0.08, w * 0.5, h * 0.5, w * 0.72);
+    bgGrad.addColorStop(0, '#f0f9ff');
+    bgGrad.addColorStop(0.65, '#e0f2fe');
+    bgGrad.addColorStop(1, '#dbeafe');
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, w, h);
 
-    // Subtle soft bokeh circles in background
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.45)';
+    // Subtle soft background bubbles
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
     ctx.beginPath();
-    ctx.arc(w * 0.14, h * 0.22, 42, 0, Math.PI * 2);
-    ctx.arc(w * 0.87, h * 0.26, 34, 0, Math.PI * 2);
+    ctx.arc(w * 0.12, h * 0.18, Math.min(w, h) * 0.11, 0, Math.PI * 2);
+    ctx.arc(w * 0.89, h * 0.22, Math.min(w, h) * 0.09, 0, Math.PI * 2);
+    ctx.arc(w * 0.86, h * 0.80, Math.min(w, h) * 0.07, 0, Math.PI * 2);
     ctx.fill();
 
+    // Scale everything cleanly with comfortable headroom in the enlarged coach stage
+    const unit = Math.min(w / 460, h / 320);
     const cx = w * 0.5;
-    const cy = h * 0.49;
-    const jawDrop = p.jaw * 14;
+    const cy = h * 0.48;
+    const jawDrop = p.jaw * 16;
+    const puff = p.cheekPuff;
 
     ctx.save();
     ctx.translate(cx, cy);
-    ctx.scale(0.88, 0.88);
-    ctx.translate(-cx, -cy);
+    ctx.scale(unit * 1.03, unit * 1.03);
 
-    // Shoulders / cozy shirt
+    // Shoulders
     ctx.fillStyle = '#3b82f6';
     ctx.beginPath();
-    ctx.ellipse(cx, h + 18, 148, 72, 0, Math.PI, 0);
+    ctx.ellipse(0, 152, 140, 62, 0, Math.PI, 0);
+    ctx.fill();
+    ctx.fillStyle = '#60a5fa';
+    ctx.beginPath();
+    ctx.ellipse(0, 134, 48, 16, 0, 0, Math.PI);
     ctx.fill();
 
     // Neck
     ctx.fillStyle = '#eab696';
     ctx.beginPath();
-    ctx.roundRect(cx - 34, cy + 72, 68, 56, 20);
+    ctx.roundRect(-34, 72, 68, 56, 20);
     ctx.fill();
-
-    // Neck shadow
-    ctx.fillStyle = 'rgba(180, 110, 74, 0.22)';
+    ctx.fillStyle = 'rgba(180, 110, 74, 0.2)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + 92, 34, 16, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 96, 36, 15, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Back Hair
     ctx.fillStyle = '#4a2c20';
     ctx.beginPath();
-    ctx.ellipse(cx, cy - 12, 116, 126, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, -14, 118, 118, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // Ears
     ctx.fillStyle = '#f2c1a2';
     ctx.beginPath();
-    ctx.ellipse(cx - 96, cy + 4, 14, 22, -0.1, 0, Math.PI * 2);
-    ctx.ellipse(cx + 96, cy + 4, 14, 22, 0.1, 0, Math.PI * 2);
+    ctx.ellipse(-98, 2, 14, 21, -0.08, 0, Math.PI * 2);
+    ctx.ellipse(98, 2, 14, 21, 0.08, 0, Math.PI * 2);
     ctx.fill();
 
-    // Face contour (stretches slightly with jawDrop!)
-    const faceGrad = ctx.createRadialGradient(cx - 18, cy - 26, 20, cx, cy, 118);
-    faceGrad.addColorStop(0, '#fde0c8');
-    faceGrad.addColorStop(0.7, '#f5c7a7');
-    faceGrad.addColorStop(1, '#e7b18e');
+    // Face contour (stretches with jawDrop AND widens cheeks with cheekPuff!)
+    const cheekOut = puff * 20;
+    const faceGrad = ctx.createRadialGradient(-20, -28, 18, 0, 8, 125);
+    faceGrad.addColorStop(0, '#ffe3cb');
+    faceGrad.addColorStop(0.68, '#f6c8a8');
+    faceGrad.addColorStop(1, '#e4ae89');
     ctx.fillStyle = faceGrad;
     ctx.beginPath();
-    ctx.moveTo(cx - 94, cy - 18);
-    ctx.bezierCurveTo(cx - 96, cy - 102, cx + 96, cy - 102, cx + 94, cy - 18);
-    ctx.bezierCurveTo(cx + 92, cy + 62 + jawDrop * 0.4, cx + 48, cy + 102 + jawDrop, cx, cy + 104 + jawDrop);
-    ctx.bezierCurveTo(cx - 48, cy + 102 + jawDrop, cx - 92, cy + 62 + jawDrop * 0.4, cx - 94, cy - 18);
+    ctx.moveTo(-95, -24);
+    ctx.bezierCurveTo(-96, -104, 96, -104, 95, -24);
+    ctx.bezierCurveTo(96 + cheekOut, 48 + jawDrop * 0.35, 58 + cheekOut * 0.45, 98 + jawDrop, 0, 102 + jawDrop);
+    ctx.bezierCurveTo(-58 - cheekOut * 0.45, 98 + jawDrop, -96 - cheekOut, 48 + jawDrop * 0.35, -95, -24);
     ctx.closePath();
     ctx.fill();
 
-    // Hair bangs / framing
+    // Soft Hair Bangs (neatly framed with headroom!)
     ctx.fillStyle = '#4a2c20';
     ctx.beginPath();
-    ctx.moveTo(cx - 98, cy - 12);
-    ctx.bezierCurveTo(cx - 102, cy - 114, cx + 102, cy - 114, cx + 98, cy - 12);
-    ctx.bezierCurveTo(cx + 84, cy - 58, cx + 38, cy - 72, cx - 8, cy - 64);
-    ctx.bezierCurveTo(cx - 56, cy - 56, cx - 82, cy - 42, cx - 98, cy - 12);
+    ctx.moveTo(-100, -16);
+    ctx.bezierCurveTo(-104, -110, 104, -110, 100, -16);
+    ctx.bezierCurveTo(84, -64, 40, -78, -6, -68);
+    ctx.bezierCurveTo(-56, -58, -84, -46, -100, -16);
     ctx.closePath();
     ctx.fill();
 
-    // Soft warm cheeks
-    ctx.fillStyle = 'rgba(244, 114, 140, 0.16)';
+    // Warm Cheeks (inflate & glow pinker when puffing cheeks!)
+    const cheekRadiusX = 22 + puff * 14;
+    const cheekRadiusY = 14 + puff * 10;
+    ctx.fillStyle = `rgba(244, 114, 140, ${0.18 + puff * 0.26})`;
     ctx.beginPath();
-    ctx.ellipse(cx - 56, cy + 18, 22, 13, 0, 0, Math.PI * 2);
-    ctx.ellipse(cx + 56, cy + 18, 22, 13, 0, 0, Math.PI * 2);
+    ctx.ellipse(-60 - puff * 6, 26, cheekRadiusX, cheekRadiusY, 0, 0, Math.PI * 2);
+    ctx.ellipse(60 + puff * 6, 26, cheekRadiusX, cheekRadiusY, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Friendly eyebrows (subtle lift when speaking!)
-    const browLift = p.open * 4;
+    // Puffed Cheek Highlight Shine & Curves
+    if (puff > 0.25) {
+      ctx.strokeStyle = `rgba(255, 255, 255, ${puff * 0.7})`;
+      ctx.lineWidth = 3.2;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.arc(-66 - puff * 6, 26, 22, Math.PI * 0.72, Math.PI * 1.28);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(66 + puff * 6, 26, 22, -Math.PI * 0.28, Math.PI * 0.28);
+      ctx.stroke();
+    }
+
+    // Friendly Eyebrows (expressive lift!)
+    const browLift = p.open * 4.5 + p.tongueOut * 3 + puff * 3;
     ctx.strokeStyle = '#4a2c20';
     ctx.lineWidth = 4.2;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(cx - 56, cy - 36 - browLift);
-    ctx.quadraticCurveTo(cx - 38, cy - 44 - browLift, cx - 20, cy - 36 - browLift);
-    ctx.moveTo(cx + 20, cy - 36 - browLift);
-    ctx.quadraticCurveTo(cx + 38, cy - 44 - browLift, cx + 56, cy - 36 - browLift);
+    ctx.moveTo(-58, -44 - browLift);
+    ctx.quadraticCurveTo(-40, -52 - browLift, -22, -44 - browLift);
+    ctx.moveTo(22, -44 - browLift);
+    ctx.quadraticCurveTo(40, -52 - browLift, 58, -44 - browLift);
     ctx.stroke();
 
-    // Eyes (with natural blink)
+    // Expressive Blinking Eyes (shifted slightly higher to give HUGE focus to lips & tongue!)
     const blinkScale = this.blinkPhase > 0 ? Math.abs(Math.cos(this.blinkPhase * Math.PI)) : 1;
-    this._drawEye(ctx, cx - 38, cy - 16, blinkScale);
-    this._drawEye(ctx, cx + 38, cy - 16, blinkScale);
+    this._drawEye(ctx, -40, -24, blinkScale);
+    this._drawEye(ctx, 40, -24, blinkScale);
 
-    // Gentle nose
+    // Gentle Nose
     ctx.strokeStyle = 'rgba(165, 102, 70, 0.45)';
     ctx.lineWidth = 3;
     ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(cx - 8, cy + 14);
-    ctx.quadraticCurveTo(cx, cy + 20, cx + 8, cy + 14);
+    ctx.moveTo(-8, 4);
+    ctx.quadraticCurveTo(0, 10, 8, 4);
     ctx.stroke();
 
     // =========================================================================
-    // REALISTIC ARTICULATING MOUTH (Focus area — slightly enlarged for clarity!)
+    // ENLARGED, CRYSTAL-CLEAR LIPS & TONGUE STAGE (Hero Area!)
     // =========================================================================
-    const mx = cx;
-    const my = cy + 52 + jawDrop * 0.25;
-    const mouthHalfW = 46 * p.width;
+    const mx = 0;
+    const my = 46 + jawDrop * 0.22;
+    const mouthHalfW = 54 * p.width;
     const innerHalfW = mouthHalfW * 0.80;
-    const openH = Math.max(0, p.open * 34);
-    const upperThick = 11 - p.press * 2.5;
-    const lowerThick = 13.5 - p.press * 2.5;
+    const openH = Math.max(0, p.open * 42);
+    const upperThick = 12.5 + p.pucker * 4.5 - p.press * 2.5;
+    const lowerThick = 15.5 + p.pucker * 4.5 - p.press * 2.5;
 
     const topInnerY = my - openH * 0.42;
     const botInnerY = my + openH * 0.58;
     const topOuterY = topInnerY - upperThick;
     const botOuterY = botInnerY + lowerThick;
 
-    // 1. Mouth Interior Cavity (visible when open)
+    // 1. Mouth Interior Cavity (dark warm maroon + teeth + internal tongue)
     if (openH > 1.5) {
       ctx.save();
       ctx.beginPath();
@@ -344,71 +401,71 @@ export class ArticulationCoach {
       ctx.quadraticCurveTo(mx, topInnerY - 2, mx + innerHalfW, my);
       ctx.quadraticCurveTo(mx, botInnerY + 3, mx - innerHalfW, my);
       ctx.closePath();
-      ctx.fillStyle = '#5c1926';
+      ctx.fillStyle = '#581523';
       ctx.fill();
       ctx.clip();
 
-      // Upper teeth (realistic bright subtle curve)
+      // Upper teeth
       ctx.fillStyle = '#fffdf9';
       ctx.beginPath();
-      ctx.roundRect(mx - innerHalfW * 0.72, topInnerY - 3, innerHalfW * 1.44, 11, 4);
+      ctx.roundRect(mx - innerHalfW * 0.74, topInnerY - 3, innerHalfW * 1.48, 12, 4);
       ctx.fill();
 
-      // Lower teeth (visible on wide open)
-      if (openH > 18) {
+      // Lower teeth (when open wide & tongue not covering them)
+      if (openH > 20 && p.tongueOut < 0.3) {
         ctx.fillStyle = '#f8f5f0';
         ctx.beginPath();
-        ctx.roundRect(mx - innerHalfW * 0.62, botInnerY - 6, innerHalfW * 1.24, 9, 4);
+        ctx.roundRect(mx - innerHalfW * 0.64, botInnerY - 6, innerHalfW * 1.28, 10, 4);
         ctx.fill();
       }
 
-      // Tongue (lifts clearly behind upper teeth for L / T / D / N!)
-      const tongueY = botInnerY - 2 - p.tongue * Math.min(openH * 0.78, 18);
-      ctx.fillStyle = '#e56b7d';
+      // Internal tongue base (visible inside mouth even before sticking out)
+      const innerTongueY = botInnerY - 2 - p.tongueIn * Math.min(openH * 0.8, 22);
+      ctx.fillStyle = '#e5637b';
       ctx.beginPath();
-      ctx.ellipse(mx, tongueY + 8, innerHalfW * 0.68, 14, 0, Math.PI, 0);
+      ctx.ellipse(mx, innerTongueY + 8, innerHalfW * 0.7, 16, 0, Math.PI, 0);
       ctx.fill();
-      if (p.tongue > 0.35) {
-        ctx.fillStyle = '#f28495';
+      if (p.tongueIn > 0.35) {
+        ctx.fillStyle = '#f48498';
         ctx.beginPath();
-        ctx.ellipse(mx, tongueY + 2, innerHalfW * 0.36, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(mx, innerTongueY + 1, innerHalfW * 0.38, 8, 0, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
     }
 
-    // 2. Upper Lip (with natural Cupid's bow)
+    // 2. Upper Lip (rich 3D vermilion gradient with Cupid's bow)
     const upperGrad = ctx.createLinearGradient(mx, topOuterY, mx, topInnerY + 4);
-    upperGrad.addColorStop(0, '#e06377');
-    upperGrad.addColorStop(1, '#c94c63');
+    upperGrad.addColorStop(0, '#e8617a');
+    upperGrad.addColorStop(1, '#c9455f');
     ctx.fillStyle = upperGrad;
     ctx.beginPath();
     ctx.moveTo(mx - mouthHalfW, my);
-    ctx.bezierCurveTo(mx - mouthHalfW * 0.55, topOuterY - 2, mx - 12, topOuterY - 4, mx, topOuterY + 3);
-    ctx.bezierCurveTo(mx + 12, topOuterY - 4, mx + mouthHalfW * 0.55, topOuterY - 2, mx + mouthHalfW, my);
+    ctx.bezierCurveTo(mx - mouthHalfW * 0.55, topOuterY - 2, mx - 14, topOuterY - 5, mx, topOuterY + 3.5);
+    ctx.bezierCurveTo(mx + 14, topOuterY - 5, mx + mouthHalfW * 0.55, topOuterY - 2, mx + mouthHalfW, my);
     ctx.quadraticCurveTo(mx, topInnerY + (openH < 2 ? 2 : 0), mx - mouthHalfW, my);
     ctx.closePath();
     ctx.fill();
 
     // 3. Lower Lip
     const lowerGrad = ctx.createLinearGradient(mx, botInnerY, mx, botOuterY);
-    lowerGrad.addColorStop(0, '#ec7587');
-    lowerGrad.addColorStop(1, '#d3566d');
+    lowerGrad.addColorStop(0, '#f07188');
+    lowerGrad.addColorStop(1, '#d14d68');
     ctx.fillStyle = lowerGrad;
     ctx.beginPath();
     ctx.moveTo(mx - mouthHalfW, my);
     ctx.quadraticCurveTo(mx, botInnerY + (openH < 2 ? 2 : 1), mx + mouthHalfW, my);
-    ctx.bezierCurveTo(mx + mouthHalfW * 0.65, botOuterY + 2, mx - mouthHalfW * 0.65, botOuterY + 2, mx - mouthHalfW, my);
+    ctx.bezierCurveTo(mx + mouthHalfW * 0.65, botOuterY + 3, mx - mouthHalfW * 0.65, botOuterY + 3, mx - mouthHalfW, my);
     ctx.closePath();
     ctx.fill();
 
-    // Subtle soft highlight on lower lip
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.24)';
+    // Soft glossy highlight on lower lip
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
     ctx.beginPath();
-    ctx.ellipse(mx, botInnerY + lowerThick * 0.45, mouthHalfW * 0.32, 3.2, 0, 0, Math.PI * 2);
+    ctx.ellipse(mx, botInnerY + lowerThick * 0.45, mouthHalfW * 0.34, 3.6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Teeth-on-lip visual cue for F/V
+    // Teeth-on-lip cue for F/V
     if (p.teethLip > 0.35) {
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
@@ -416,46 +473,110 @@ export class ArticulationCoach {
       ctx.fill();
     }
 
-    // Closed-lip seam line when pressed (M/B/P)
+    // Closed lip seam line
     if (openH < 2) {
       ctx.strokeStyle = p.press > 0.5 ? '#881337' : '#9f2c46';
-      ctx.lineWidth = p.press > 0.5 ? 3 : 1.8;
+      ctx.lineWidth = p.press > 0.5 ? 3.5 : 2;
       ctx.beginPath();
       ctx.moveTo(mx - mouthHalfW * 0.9, my + 1);
       ctx.quadraticCurveTo(mx, my + 2.5, mx + mouthHalfW * 0.9, my + 1);
       ctx.stroke();
     }
 
-    // 4. Optional Synchronized Lip-Tracking Guide Lines (matches Emma's live camera!)
+    // =========================================================================
+    // 4. EXPRESSIVE 3D PROTRUDING TONGUE (Draws OVER lips when sticking out!)
+    // =========================================================================
+    let tongueTipX = mx;
+    let tongueTipY = my;
+    if (p.tongueOut > 0.06) {
+      const tOut = p.tongueOut;
+      const baseW = 24 + tOut * 6;
+      const tipX = mx + p.tongueX * 44 * tOut;
+      const tipY = my + 6 + p.tongueY * 36 * tOut + (p.tongueY >= 0 ? tOut * 14 : -tOut * 6);
+      tongueTipX = tipX;
+      tongueTipY = tipY;
+
+      ctx.save();
+      // Subtle cast shadow under protruding tongue onto chin/lip
+      ctx.shadowColor = 'rgba(136, 19, 55, 0.32)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetY = 4;
+
+      const tGrad = ctx.createLinearGradient(mx, my - 6, tipX, tipY);
+      tGrad.addColorStop(0, '#e14d6c');
+      tGrad.addColorStop(0.55, '#fb7185');
+      tGrad.addColorStop(1, '#fda4af');
+      ctx.fillStyle = tGrad;
+
+      // Smooth organic tongue silhouette from mouth center curving to (tipX, tipY)
+      const dx = tipX - mx;
+      const dy = tipY - my;
+      const len = Math.max(12, Math.hypot(dx, dy));
+      const nx = -dy / len;
+      const ny = dx / len;
+      const midX = mx + dx * 0.56;
+      const midY = my + dy * 0.56;
+      const tipW = baseW * 0.72;
+
+      ctx.beginPath();
+      ctx.moveTo(mx - baseW * 0.85, my + 2);
+      ctx.quadraticCurveTo(midX + nx * tipW, midY + ny * tipW, tipX, tipY);
+      ctx.quadraticCurveTo(midX - nx * tipW, midY - ny * tipW, mx + baseW * 0.85, my + 2);
+      ctx.closePath();
+      ctx.fill();
+
+      // Natural soft tongue center groove line
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetY = 0;
+      ctx.strokeStyle = 'rgba(190, 24, 93, 0.35)';
+      ctx.lineWidth = 2.6;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(mx, my + 2);
+      ctx.quadraticCurveTo(midX, midY, mx + dx * 0.76, my + dy * 0.76);
+      ctx.stroke();
+
+      // Glossy highlight dot near tongue tip
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.38)';
+      ctx.beginPath();
+      ctx.ellipse(mx + dx * 0.65 - 5, my + dy * 0.65 - 3, 6, 3, Math.atan2(dy, dx), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // =========================================================================
+    // 5. SYNCHRONIZED TRACKING LINES & ANIMATED DIRECTIONAL GUIDE ARROWS
+    // =========================================================================
     if (this.showLines) {
-      const isMoving = p.open > 0.16 || p.press > 0.45 || Math.abs(p.width - 0.96) > 0.16;
-      const contourColor = isMoving ? '#10b981' : '#38bdf8';
+      const isActive =
+        p.open > 0.16 || p.press > 0.45 || p.pucker > 0.35 || p.tongueOut > 0.15 || p.cheekPuff > 0.25 || Math.abs(p.width - 0.96) > 0.16;
+      const contourColor = isActive ? '#10b981' : '#38bdf8';
 
       ctx.save();
       // Outer lip contour tracking loop
       ctx.strokeStyle = contourColor;
-      ctx.lineWidth = 2.6;
+      ctx.lineWidth = 2.8;
       ctx.shadowColor = contourColor;
-      ctx.shadowBlur = 8;
+      ctx.shadowBlur = 9;
       ctx.beginPath();
       ctx.moveTo(mx - mouthHalfW, my);
-      ctx.bezierCurveTo(mx - mouthHalfW * 0.55, topOuterY - 2, mx - 12, topOuterY - 4, mx, topOuterY + 3);
-      ctx.bezierCurveTo(mx + 12, topOuterY - 4, mx + mouthHalfW * 0.55, topOuterY - 2, mx + mouthHalfW, my);
-      ctx.bezierCurveTo(mx + mouthHalfW * 0.65, botOuterY + 2, mx - mouthHalfW * 0.65, botOuterY + 2, mx - mouthHalfW, my);
+      ctx.bezierCurveTo(mx - mouthHalfW * 0.55, topOuterY - 2, mx - 14, topOuterY - 5, mx, topOuterY + 3.5);
+      ctx.bezierCurveTo(mx + 14, topOuterY - 5, mx + mouthHalfW * 0.55, topOuterY - 2, mx + mouthHalfW, my);
+      ctx.bezierCurveTo(mx + mouthHalfW * 0.65, botOuterY + 3, mx - mouthHalfW * 0.65, botOuterY + 3, mx - mouthHalfW, my);
       ctx.closePath();
       ctx.stroke();
 
-      // Horizontal width measurement line (amber)
       ctx.shadowBlur = 0;
+      // Horizontal width line
       ctx.strokeStyle = '#f59e0b';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2.2;
       ctx.setLineDash([4, 4]);
       ctx.beginPath();
       ctx.moveTo(mx - mouthHalfW, my);
       ctx.lineTo(mx + mouthHalfW, my);
       ctx.stroke();
 
-      // Vertical aperture measurement line (mint)
+      // Vertical aperture line
       ctx.strokeStyle = '#10b981';
       ctx.lineWidth = 2.6;
       ctx.setLineDash([4, 3]);
@@ -465,28 +586,109 @@ export class ArticulationCoach {
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Anchor dots
-      this._dot(ctx, mx - mouthHalfW, my, 4.2, '#f59e0b');
-      this._dot(ctx, mx + mouthHalfW, my, 4.2, '#f59e0b');
-      this._dot(ctx, mx, topInnerY, 4.2, '#10b981');
-      this._dot(ctx, mx, botInnerY, 4.2, '#10b981');
+      this._dot(ctx, mx - mouthHalfW, my, 4.4, '#f59e0b');
+      this._dot(ctx, mx + mouthHalfW, my, 4.4, '#f59e0b');
+      this._dot(ctx, mx, topInnerY, 4.4, '#10b981');
+      this._dot(ctx, mx, botInnerY, 4.4, '#10b981');
+
+      // Glowing Pink Tongue Tip Marker when tongue moves!
+      if (p.tongueOut > 0.15) {
+        ctx.strokeStyle = '#ec4899';
+        ctx.lineWidth = 2.8;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(mx, my);
+        ctx.lineTo(tongueTipX, tongueTipY);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        this._dot(ctx, tongueTipX, tongueTipY, 6, '#ec4899');
+      }
+
+      // Draw intuitive pulsing directional arrows for Oral-Motor Moves!
+      if (this.isMoveMode && this.item?.guide) {
+        this._drawMoveGuideArrows(ctx, this.item.guide, mx, my, mouthHalfW, topOuterY, botOuterY, puff);
+      }
+
       ctx.restore();
     }
 
     ctx.restore();
 
-    // Slow-motion pill indicator in top-left of canvas
+    // Slow-motion badge (DPR-aware)
     if (this.slowMode) {
-      ctx.fillStyle = 'rgba(37, 99, 235, 0.88)';
+      const dpr = w / Math.max(1, this.canvas.clientWidth);
+      ctx.fillStyle = 'rgba(37, 99, 235, 0.9)';
       ctx.beginPath();
-      ctx.roundRect(12, 12, 92, 26, 13);
+      ctx.roundRect(12 * dpr, 12 * dpr, 98 * dpr, 26 * dpr, 13 * dpr);
       ctx.fill();
       ctx.fillStyle = '#ffffff';
-      ctx.font = '800 12px Nunito, sans-serif';
+      ctx.font = `800 ${Math.round(12 * dpr)}px Nunito, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('🐢 0.5× SLOW', 58, 25);
+      ctx.fillText('🐢 0.5× SLOW', 61 * dpr, 25 * dpr);
     }
+  }
+
+  _drawMoveGuideArrows(ctx, guide, mx, my, mouthHalfW, topOuterY, botOuterY, puff) {
+    const pulse = Math.sin(this.clockSec * 5) * 4;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (guide === 'openWide' || guide === 'lipPop') {
+      this._drawArrow(ctx, mx, topOuterY - 12 - pulse, mx, topOuterY - 30 - pulse, '#10b981');
+      this._drawArrow(ctx, mx, botOuterY + 12 + pulse, mx, botOuterY + 30 + pulse, '#10b981');
+    } else if (guide === 'smile') {
+      this._drawArrow(ctx, mx - mouthHalfW - 10 - pulse, my, mx - mouthHalfW - 30 - pulse, my, '#f59e0b');
+      this._drawArrow(ctx, mx + mouthHalfW + 10 + pulse, my, mx + mouthHalfW + 30 + pulse, my, '#f59e0b');
+    } else if (guide === 'kiss') {
+      // Inward arrows + pulsing "O" circle
+      this._drawArrow(ctx, mx - mouthHalfW - 32 + pulse, my, mx - mouthHalfW - 12 + pulse, my, '#ec4899');
+      this._drawArrow(ctx, mx + mouthHalfW + 32 - pulse, my, mx + mouthHalfW + 12 - pulse, my, '#ec4899');
+      ctx.strokeStyle = 'rgba(236, 72, 153, 0.55)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(mx, my, 24 + pulse * 0.4, 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (guide === 'tongueOut' || guide === 'tongueDown') {
+      this._drawArrow(ctx, mx, botOuterY + 16 + pulse, mx, botOuterY + 38 + pulse, '#ec4899');
+    } else if (guide === 'tongueUp') {
+      this._drawArrow(ctx, mx, topOuterY - 6 - pulse, mx, topOuterY - 28 - pulse, '#ec4899');
+    } else if (guide === 'tongueWiggle') {
+      this._drawArrow(ctx, mx - 26 - pulse, my + 24, mx - 54 - pulse, my + 24, '#ec4899');
+      this._drawArrow(ctx, mx + 26 + pulse, my + 24, mx + 54 + pulse, my + 24, '#ec4899');
+    } else if (guide === 'cheekPuff') {
+      ctx.strokeStyle = '#ec4899';
+      ctx.lineWidth = 3.2;
+      ctx.beginPath();
+      ctx.arc(-86 - puff * 6 - pulse * 0.6, 26, 18, Math.PI * 0.68, Math.PI * 1.32);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(86 + puff * 6 + pulse * 0.6, 26, 18, -Math.PI * 0.32, Math.PI * 0.32);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  _drawArrow(ctx, x1, y1, x2, y2, color) {
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    const head = 9;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.stroke();
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 3.5;
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(x2, y2);
+    ctx.lineTo(x2 - head * Math.cos(angle - Math.PI / 6), y2 - head * Math.sin(angle - Math.PI / 6));
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - head * Math.cos(angle + Math.PI / 6), y2 - head * Math.sin(angle + Math.PI / 6));
+    ctx.stroke();
   }
 
   _drawEye(ctx, x, y, blinkScale) {

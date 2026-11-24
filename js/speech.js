@@ -1,5 +1,5 @@
 // ============================================================================
-// Speech Synthesis & Gentle Web Audio Reward Chimes (iPad Safari Friendly)
+// Speech Synthesis & Joyful Felicitation Fanfare / Gentle Chimes
 // ============================================================================
 
 export class SpeechEngine {
@@ -33,9 +33,6 @@ export class SpeechEngine {
     this._onVoicesChangedCallbacks.forEach((cb) => cb(this.voices));
   }
 
-  /**
-   * Must be called inside a user tap/click to unlock iPad Safari audio & speech.
-   */
   unlockAudio() {
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
@@ -59,31 +56,78 @@ export class SpeechEngine {
     if (cfg.calmMode !== undefined) this.calmMode = Boolean(cfg.calmMode);
   }
 
-  playRewardChime() {
+  /**
+   * Plays a cheerful musical felicitation fanfare (bright ascending major arpeggio + sparkle)
+   * or a soft 2-note chime in Calm Mode.
+   */
+  playFelicitationFanfare({ celebratory = true } = {}) {
     if (!this.chimeEnabled) return;
     this.unlockAudio();
     if (!this.audioCtx) return;
 
     const now = this.audioCtx.currentTime;
-    // Soft warm pentatonic triad (C5 -> E5 -> G5)
-    const freqs = this.calmMode ? [523.25, 659.25] : [523.25, 659.25, 783.99];
-    const peakGain = this.calmMode ? 0.08 : 0.14;
+    const notes = this.calmMode
+      ? [523.25, 659.25]
+      : celebratory
+        ? [523.25, 659.25, 783.99, 1046.5] // C5 -> E5 -> G5 -> C6 joyful fanfare!
+        : [523.25, 659.25, 783.99];
 
-    freqs.forEach((freq, i) => {
+    const peakGain = this.calmMode ? 0.08 : 0.14;
+    const step = this.calmMode ? 0.12 : 0.085;
+
+    notes.forEach((freq, i) => {
+      const start = now + i * step;
       const osc = this.audioCtx.createOscillator();
       const gain = this.audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(freq, now + i * 0.09);
+      osc.type = i === notes.length - 1 ? 'triangle' : 'sine';
+      osc.frequency.setValueAtTime(freq, start);
 
-      gain.gain.setValueAtTime(0.0001, now + i * 0.09);
-      gain.gain.exponentialRampToValueAtTime(peakGain, now + i * 0.09 + 0.025);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + 0.42);
+      gain.gain.setValueAtTime(0.0001, start);
+      gain.gain.exponentialRampToValueAtTime(peakGain, start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, start + (i === notes.length - 1 ? 0.65 : 0.36));
 
       osc.connect(gain);
       gain.connect(this.audioCtx.destination);
-      osc.start(now + i * 0.09);
-      osc.stop(now + i * 0.09 + 0.45);
+      osc.start(start);
+      osc.stop(start + 0.7);
     });
+  }
+
+  speakFelicitation(praisePhrase, childName = 'Emma') {
+    this.playFelicitationFanfare({ celebratory: true });
+    if (!('speechSynthesis' in window)) return;
+
+    const speakNow = () => {
+      try {
+        window.speechSynthesis.cancel();
+        let text = `${praisePhrase}, ${childName}!`;
+        if (this.language.startsWith('es')) {
+          const esCheers = ['¡Muy bien', '¡Bravo', '¡Excelente', '¡Genial'];
+          const pick = esCheers[Math.floor(Math.random() * esCheers.length)];
+          text = `${pick}, ${childName}!`;
+        } else if (this.language.startsWith('pt')) {
+          text = `Muito bem, ${childName}!`;
+        } else if (this.language.startsWith('fr')) {
+          text = `Bravo, ${childName}!`;
+        } else {
+          const enCheers = ['Yay!', 'Bravo!', 'Woohoo!'];
+          const cheer = enCheers[Math.floor(Math.random() * enCheers.length)];
+          text = `${cheer} ${praisePhrase}, ${childName}!`;
+        }
+
+        const utter = new SpeechSynthesisUtterance(text);
+        utter.lang = this.language;
+        utter.rate = Math.min(1.05, Math.max(0.75, this.rate + 0.08));
+        utter.pitch = this.calmMode ? 1.02 : 1.14;
+        const chosen = this._pickVoice();
+        if (chosen) utter.voice = chosen;
+        window.speechSynthesis.speak(utter);
+      } catch (err) {
+        console.warn('Felicitation speech failed:', err);
+      }
+    };
+
+    setTimeout(speakNow, this.chimeEnabled ? 220 : 20);
   }
 
   speakWord(wordText, { isReward = false, slow = false } = {}) {
@@ -91,7 +135,7 @@ export class SpeechEngine {
     this.unlockAudio();
 
     if (isReward) {
-      this.playRewardChime();
+      this.playFelicitationFanfare({ celebratory: false });
     }
 
     const speakNow = () => {
@@ -124,7 +168,7 @@ export class SpeechEngine {
     };
 
     if (isReward && this.chimeEnabled) {
-      setTimeout(speakNow, 150);
+      setTimeout(speakNow, 180);
     } else {
       speakNow();
     }
@@ -140,7 +184,6 @@ export class SpeechEngine {
     const matching = this.voices.filter((v) => v.lang.toLowerCase().startsWith(langPrefix));
     if (matching.length === 0) return this.voices[0] || null;
 
-    // Prefer warm, natural voices on iOS/macOS/Android/Chrome
     const preferredNames = ['Samantha', 'Ava', 'Karen', 'Google US English', 'Aria', 'Monica', 'Paulina', 'Luciana'];
     for (const name of preferredNames) {
       const hit = matching.find((v) => v.name.includes(name));

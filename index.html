@@ -7,14 +7,14 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Emma's Voice">
   <meta name="theme-color" content="#2563EB">
-  <title>Emma's Voice — Lip-Tracking Speech Companion</title>
+  <title>Emma's Voice — Lips, Tongue &amp; Speech Coach</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
   <link rel="apple-touch-icon" href="assets/icon.svg">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=3">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -43,8 +43,18 @@
         </div>
       </div>
 
+      <!-- Primary Mode Switcher: Lips & Tongue Moves (Default) | Words -->
+      <div class="mode-switcher" role="tablist" aria-label="Practice mode">
+        <button class="mode-tab active" id="modeMovesBtn" data-mode="moves" type="button" role="tab" aria-selected="true">
+          <span>👅</span> <span>Moves</span>
+        </button>
+        <button class="mode-tab" id="modeWordsBtn" data-mode="words" type="button" role="tab" aria-selected="false">
+          <span>💬</span> <span>Words</span>
+        </button>
+      </div>
+
       <div class="topbar-actions">
-        <div class="star-counter" id="totalStarsPill" title="Total words practiced">
+        <div class="star-counter" id="totalStarsPill" title="Total stars earned">
           <span class="star-icon">★</span>
           <span id="totalStarsValue">0</span>
         </div>
@@ -64,31 +74,32 @@
 
     <!-- Main Tablet Two-Column Workspace -->
     <main class="workspace">
-      <!-- LEFT: Camera Mirror & Live Lip-Tracking Stage -->
-      <section class="camera-stage-card" aria-label="Camera mirror and lip detection">
+      <!-- LEFT: Camera Mirror & Live Lip/Tongue Tracking Stage -->
+      <section class="camera-stage-card" aria-label="Camera mirror and live tracking">
         <div class="camera-viewport" id="cameraViewport">
           <video id="cameraVideo" playsinline autoplay muted></video>
-          <canvas id="trackingCanvas" aria-label="Live lip tracking lines"></canvas>
+          <canvas id="trackingCanvas" aria-label="Live lip and tongue tracking lines"></canvas>
           <canvas id="celebrationCanvas" aria-hidden="true"></canvas>
 
-          <!-- Top Overlay Bar (Legend + Quick Controls — flex-spaced so they never overlap) -->
+          <!-- Top Overlay Bar (Legend + Quick Controls) -->
           <div class="viewport-hud-top hidden" id="viewportHudTop">
             <div class="tracking-legend" id="trackingLegend">
               <span class="legend-item"><i class="swatch swatch-outer"></i>Lips</span>
               <span class="legend-item"><i class="swatch swatch-vertical"></i>Open</span>
               <span class="legend-item"><i class="swatch swatch-width"></i>Width</span>
+              <span class="legend-item"><i class="swatch swatch-tongue"></i>Tongue</span>
               <span class="legend-metrics" id="liveMetricsText">0%</span>
             </div>
 
             <div class="viewport-controls" id="viewportControls">
-              <button class="icon-chip" id="toggleLinesStyleBtn" type="button" title="Switch lip line detail">
+              <button class="icon-chip" id="toggleLinesStyleBtn" type="button" title="Switch tracking line detail">
                 <span>〰️</span> <span id="linesStyleLabel">Lip Lines</span>
               </button>
               <button class="icon-chip" id="recalibrateBtn" type="button" title="Recalibrate resting lips">
                 <span>🎯</span> <span>Reset</span>
               </button>
-              <button class="icon-chip hidden" id="demoSpeakTriggerBtn" type="button" title="Simulate Emma moving her lips">
-                <span>👄</span> <span>Simulate Lips</span>
+              <button class="icon-chip hidden" id="demoSpeakTriggerBtn" type="button" title="Simulate matching the active move">
+                <span>😛</span> <span>Simulate Move</span>
               </button>
               <button class="icon-chip danger-chip" id="stopCameraBtn" type="button" title="Pause camera">
                 <span>⏸</span>
@@ -96,31 +107,34 @@
             </div>
           </div>
 
-          <!-- Gentle Reinforcement Banner (appears when lip movement triggers word) -->
+          <!-- Joyful Felicitation Banner (appears on match!) -->
           <div class="reinforcement-banner" id="reinforcementBanner" aria-live="polite">
-            <div class="reinforcement-emoji" id="reinforcementEmoji">🌟</div>
-            <div class="reinforcement-word" id="reinforcementWord">Mama!</div>
-            <div class="reinforcement-sub" id="reinforcementSub">Great lip movement!</div>
+            <div class="felicitation-top">
+              <span class="trophy-pop">🏆</span>
+              <span class="reinforcement-emoji" id="reinforcementEmoji">😛</span>
+              <span class="trophy-pop">🎉</span>
+            </div>
+            <div class="reinforcement-word" id="reinforcementWord">Bravo!</div>
+            <div class="reinforcement-sub" id="reinforcementSub">Awesome Tongue Out, Emma! ★</div>
           </div>
 
           <!-- Welcome / Start Camera Overlay -->
           <div class="camera-start-overlay" id="cameraStartOverlay">
             <div class="start-card">
               <div class="start-illustration" aria-hidden="true">
-                <svg viewBox="0 0 180 110" width="144" height="88">
-                  <rect x="6" y="6" width="168" height="98" rx="22" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="2.5"/>
-                  <path d="M40 58 C56 36, 78 36, 90 45 C102 36, 124 36, 140 58 C124 82, 56 82, 40 58 Z" fill="#FDA4AF" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
-                  <path d="M56 58 C72 52, 108 52, 124 58 C108 69, 72 69, 56 58 Z" fill="#FFFFFF" stroke="#10B981" stroke-width="2.5"/>
-                  <line x1="90" y1="45" x2="90" y2="72" stroke="#10B981" stroke-width="3" stroke-dasharray="4 3" stroke-linecap="round"/>
-                  <line x1="40" y1="58" x2="140" y2="58" stroke="#F59E0B" stroke-width="2.5" stroke-dasharray="4 4" stroke-linecap="round"/>
-                  <circle cx="40" cy="58" r="5" fill="#F59E0B"/>
-                  <circle cx="140" cy="58" r="5" fill="#F59E0B"/>
-                  <circle cx="90" cy="45" r="4.5" fill="#10B981"/>
-                  <circle cx="90" cy="72" r="4.5" fill="#10B981"/>
+                <svg viewBox="0 0 180 118" width="152" height="100">
+                  <rect x="6" y="6" width="168" height="106" rx="22" fill="#EFF6FF" stroke="#BFDBFE" stroke-width="2.5"/>
+                  <path d="M40 54 C56 32, 78 32, 90 41 C102 32, 124 32, 140 54 C124 78, 56 78, 40 54 Z" fill="#FDA4AF" stroke="#2563EB" stroke-width="3" stroke-linejoin="round"/>
+                  <path d="M56 54 C72 48, 108 48, 124 54 C108 66, 72 66, 56 54 Z" fill="#581523"/>
+                  <path d="M74 56 Q90 98 106 56 Z" fill="#FB7185" stroke="#EC4899" stroke-width="2.2"/>
+                  <line x1="90" y1="54" x2="90" y2="86" stroke="#EC4899" stroke-width="2.6" stroke-dasharray="4 3" stroke-linecap="round"/>
+                  <circle cx="90" cy="86" r="5" fill="#EC4899" stroke="#FFFFFF" stroke-width="1.8"/>
+                  <circle cx="40" cy="54" r="4.5" fill="#F59E0B"/>
+                  <circle cx="140" cy="54" r="4.5" fill="#F59E0B"/>
                 </svg>
               </div>
-              <h2>Ready to Practice Talking?</h2>
-              <p>Turn on the front camera so we can watch lip movements with glowing guide lines and say each word out loud right away.</p>
+              <h2>Let's Practice Lips &amp; Tongue!</h2>
+              <p>Turn on the front camera so she can copy the big lip &amp; tongue animations on the right and earn fun celebrations when she matches!</p>
               <div class="start-actions">
                 <button class="primary-cta" id="startCameraBtn" type="button">
                   <span class="cta-icon">📷</span>
@@ -139,94 +153,91 @@
           <!-- Model Loading Toast -->
           <div class="loading-toast hidden" id="modelLoadingToast">
             <span class="spinner"></span>
-            <span id="modelLoadingText">Loading lip-tracking model…</span>
+            <span id="modelLoadingText">Loading lip &amp; tongue AI model…</span>
           </div>
         </div>
 
-        <!-- Bottom Active Word & Live Lip Movement Bar -->
+        <!-- Bottom Active Target & Live Match Gauge Bar -->
         <div class="active-word-bar">
-          <button class="active-word-trigger" id="activeWordSpeakBtn" type="button" title="Tap to hear word out loud">
-            <span class="active-word-emoji" id="activeWordEmoji">👩</span>
+          <button class="active-word-trigger" id="activeWordSpeakBtn" type="button" title="Tap to hear & replay animation">
+            <span class="active-word-emoji" id="activeWordEmoji">😮</span>
             <div class="active-word-meta">
               <div class="active-word-title-row">
-                <span class="active-word-text" id="activeWordText">Mama</span>
-                <span class="speak-badge">🔊 Tap to hear</span>
+                <span class="active-word-text" id="activeWordText">Open Wide</span>
+                <span class="speak-badge" id="activeSpeakBadge">▶ Watch &amp; Hear</span>
               </div>
-              <div class="active-word-cue" id="activeWordCue">Press lips together, then open wide</div>
+              <div class="active-word-cue" id="activeWordCue">Open your mouth big and wide like a lion!</div>
             </div>
           </button>
 
-          <div class="lip-meter-box" aria-label="Live lip movement gauge">
+          <div class="lip-meter-box" aria-label="Live move match gauge">
             <div class="lip-meter-header">
-              <span class="meter-title">Lip Movement</span>
+              <span class="meter-title" id="meterTitleLabel">Move Match</span>
               <span class="meter-state" id="lipStateBadge">Waiting</span>
             </div>
             <div class="meter-track">
               <div class="meter-fill" id="lipMeterFill"></div>
-              <div class="meter-threshold" id="lipThresholdMarker" title="Activation threshold"></div>
+              <div class="meter-threshold" id="lipThresholdMarker" title="Match threshold"></div>
             </div>
             <div class="meter-sub-row">
-              <span id="lipShapeHint">Move lips to say it!</span>
+              <span id="lipShapeHint">Copy the big animation!</span>
               <span class="word-stars-inline" id="activeWordStars">☆☆☆☆☆</span>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- RIGHT: Watch & Copy Video Coach + Target Words Panel -->
+      <!-- RIGHT: Amplified Watch & Copy Animation + Moves / Words Panel -->
       <aside class="side-panel">
-        <!-- Watch & Copy Model Video Card -->
-        <section class="coach-card" aria-label="Watch somebody say the word">
+        <!-- AMPLIFIED Watch & Copy Model Card -->
+        <section class="coach-card" aria-label="Watch and copy lips and tongue animation">
           <div class="card-header">
             <div class="card-title-group">
               <h2>Watch &amp; Copy</h2>
-              <span class="mode-badge" id="coachModeBadge">Articulation Coach</span>
+              <span class="mode-badge" id="coachModeBadge">Lips &amp; Tongue Coach</span>
             </div>
-            <label class="mini-switch" title="Show matching lip tracking lines on the coach">
+            <label class="mini-switch" title="Show guide lines and arrows on the animation">
               <input type="checkbox" id="coachLinesToggle" checked>
               <span class="mini-slider"></span>
-              <span class="mini-switch-label">Lines</span>
+              <span class="mini-switch-label">Guides</span>
             </label>
           </div>
 
           <div class="coach-stage" id="coachStage">
-            <canvas id="coachCanvas" width="480" height="320" aria-label="Animated speaker showing how to move lips"></canvas>
+            <canvas id="coachCanvas" width="560" height="400" aria-label="Enlarged animated lips and tongue coach"></canvas>
             <video id="parentVideoPlayer" class="hidden" playsinline muted loop></video>
             <div class="syllable-strip" id="syllableStrip"></div>
           </div>
 
           <div class="coach-controls">
             <button class="coach-btn coach-btn-primary" id="coachPlayBtn" type="button">
-              <span>▶</span> <span>Say &amp; Show</span>
+              <span>▶</span> <span>Show</span>
             </button>
             <button class="coach-btn" id="coachSlowBtn" type="button" aria-pressed="false" title="Slow motion 0.5x">
               <span>🐢</span> <span>Slow</span>
             </button>
-            <button class="coach-btn active" id="coachLoopBtn" type="button" aria-pressed="true" title="Loop model gently">
+            <button class="coach-btn active" id="coachLoopBtn" type="button" aria-pressed="true" title="Loop animation">
               <span>🔁</span> <span>Loop</span>
             </button>
-            <button class="coach-btn" id="quickRecordVideoBtn" type="button" title="Record a real parent video for this word">
+            <button class="coach-btn" id="quickRecordVideoBtn" type="button" title="Record a real parent video for this move or word">
               <span>🎥</span> <span>Record</span>
             </button>
           </div>
         </section>
 
-        <!-- Words We Are Learning Card -->
-        <section class="words-card" aria-label="Words to practice">
+        <!-- Moves to Learn / Words to Learn Card -->
+        <section class="words-card" aria-label="Moves or words to learn">
           <div class="card-header">
-            <h2>Words to Learn</h2>
-            <button class="text-link-btn" id="openAddWordBtn" type="button">+ Add Word</button>
+            <h2 id="listCardTitle">Moves to Learn</h2>
+            <div class="card-header-actions">
+              <button class="text-link-btn" id="nextItemBtn" type="button">Next ➡</button>
+              <button class="text-link-btn hidden" id="openAddWordBtn" type="button">+ Add Word</button>
+            </div>
           </div>
 
-          <div class="category-tabs" id="categoryTabs" role="tablist">
-            <button class="cat-chip active" data-cat="all" role="tab" aria-selected="true">All</button>
-            <button class="cat-chip" data-cat="starter" role="tab" aria-selected="false">Starter</button>
-            <button class="cat-chip" data-cat="needs" role="tab" aria-selected="false">Needs</button>
-            <button class="cat-chip" data-cat="play" role="tab" aria-selected="false">Play</button>
-            <button class="cat-chip" data-cat="custom" role="tab" aria-selected="false">Custom</button>
-          </div>
+          <div class="category-tabs" id="categoryTabs" role="tablist"></div>
 
-          <div class="word-grid" id="wordGrid" role="listbox" aria-label="Target words"></div>
+          <div class="word-grid" id="wordGrid" role="listbox" aria-label="Target moves or words"></div>
         </section>
       </aside>
     </main>
@@ -238,15 +249,15 @@
       <div class="modal-header">
         <div>
           <h2 id="parentModalTitle">Parent &amp; Therapist Studio</h2>
-          <p class="modal-subtitle">Customize sensitivity, speech voice, words, and real videos</p>
+          <p class="modal-subtitle">Customize sensitivity, speech voice, moves/words, and real parent videos</p>
         </div>
         <button class="close-btn" id="closeParentModalBtn" type="button" aria-label="Close settings">✕</button>
       </div>
 
       <div class="modal-tabs" role="tablist">
-        <button class="modal-tab active" data-tab="detection" type="button">Lips &amp; Lines</button>
+        <button class="modal-tab active" data-tab="detection" type="button">Tracking</button>
         <button class="modal-tab" data-tab="voice" type="button">Voice &amp; Child</button>
-        <button class="modal-tab" data-tab="words" type="button">Words &amp; Videos</button>
+        <button class="modal-tab" data-tab="words" type="button">Videos &amp; Words</button>
         <button class="modal-tab" data-tab="progress" type="button">Progress</button>
       </div>
 
@@ -254,38 +265,38 @@
         <!-- Tab 1: Detection & Lines -->
         <div class="tab-panel active" id="tab-detection">
           <div class="setting-group">
-            <label class="setting-label" for="detectionModeSelect">Reinforcement Mode</label>
+            <label class="setting-label" for="detectionModeSelect">Words Mode Reinforcement Style</label>
             <select id="detectionModeSelect" class="input-control">
               <option value="encourage">Encourage Any Lip Effort (Best for Beginners)</option>
               <option value="match">Match Target Mouth Shape (Intermediate)</option>
             </select>
-            <p class="setting-help">In Beginner mode, any clear intentional lip movement rewards her immediately by speaking the target word out loud.</p>
+            <p class="setting-help">In Moves Mode, the camera specifically matches the selected lip, tongue, or cheek move. In Words Mode, Beginner rewards any intentional lip effort.</p>
           </div>
 
           <div class="setting-group">
             <div class="setting-row-between">
-              <label class="setting-label" for="sensitivityRange">Lip Movement Sensitivity</label>
+              <label class="setting-label" for="sensitivityRange">Match Sensitivity</label>
               <span class="setting-value" id="sensitivityValueLabel">Medium (6/10)</span>
             </div>
             <input type="range" id="sensitivityRange" min="1" max="10" step="1" value="6" class="range-control">
             <div class="range-labels">
-              <span>Larger movement</span>
-              <span>Gentle tiny movement</span>
+              <span>Bigger movement</span>
+              <span>Gentle smaller movement</span>
             </div>
           </div>
 
           <div class="setting-group">
             <div class="setting-row-between">
-              <label class="setting-label" for="cooldownRange">Pause Between Reinforcements</label>
-              <span class="setting-value" id="cooldownValueLabel">2.5s</span>
+              <label class="setting-label" for="cooldownRange">Pause Between Celebrations</label>
+              <span class="setting-value" id="cooldownValueLabel">2.6s</span>
             </div>
-            <input type="range" id="cooldownRange" min="1.2" max="5.0" step="0.1" value="2.5" class="range-control">
+            <input type="range" id="cooldownRange" min="1.2" max="5.0" step="0.1" value="2.6" class="range-control">
           </div>
 
           <div class="setting-group">
             <label class="setting-label" for="lineStyleSelect">Camera Tracking Lines Style</label>
             <select id="lineStyleSelect" class="input-control">
-              <option value="clean">Clean Lip Contours + Measurement Lines</option>
+              <option value="clean">Clean Lip &amp; Tongue Lines</option>
               <option value="detailed">Detailed Face &amp; Lip Mesh</option>
               <option value="minimal">Simple Soft Lip Halo</option>
             </select>
@@ -294,7 +305,7 @@
           <div class="toggle-row">
             <div>
               <div class="setting-label">Sensory-Safe Calm Mode</div>
-              <div class="setting-help">Softer celebration motion and gentle chimes</div>
+              <div class="setting-help">Softer felicitation bubbles and gentler chimes</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="calmModeSetting">
@@ -341,15 +352,15 @@
           <div class="setting-group">
             <div class="setting-row-between">
               <label class="setting-label" for="speechRateRange">Speaking Speed</label>
-              <span class="setting-value" id="speechRateLabel">0.85× (Clear)</span>
+              <span class="setting-value" id="speechRateLabel">0.85×</span>
             </div>
             <input type="range" id="speechRateRange" min="0.55" max="1.15" step="0.05" value="0.85" class="range-control">
           </div>
 
           <div class="toggle-row">
             <div>
-              <div class="setting-label">Gentle Reward Chime</div>
-              <div class="setting-help">Play a soft melodic chime right before speaking the word</div>
+              <div class="setting-label">Felicitation Musical Fanfare</div>
+              <div class="setting-help">Play a cheerful melody when she matches a move or word</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="chimeSetting" checked>
@@ -359,8 +370,8 @@
 
           <div class="toggle-row">
             <div>
-              <div class="setting-label">Short Verbal Praise</div>
-              <div class="setting-help">Add "Yay!" occasionally (off = clean single-word SLP modeling)</div>
+              <div class="setting-label">Add Praise in Words Mode</div>
+              <div class="setting-help">Adds "Yay!" after spoken words (Moves Mode always cheers!)</div>
             </div>
             <label class="switch">
               <input type="checkbox" id="praiseSetting">
@@ -368,13 +379,13 @@
             </label>
           </div>
 
-          <button class="secondary-cta full-width" id="testVoiceBtn" type="button">🔊 Test Voice Now</button>
+          <button class="secondary-cta full-width" id="testVoiceBtn" type="button">🔊 Test Felicitation Sound</button>
         </div>
 
         <!-- Tab 3: Words & Real Videos -->
         <div class="tab-panel" id="tab-words">
           <form class="add-word-form" id="addWordForm">
-            <h3>Add a New Word</h3>
+            <h3>Add a Custom Word (for Words Mode)</h3>
             <div class="form-row">
               <input type="text" id="newWordText" class="input-control" placeholder="Word (e.g. Cookie, Agua)" required maxlength="24">
               <input type="text" id="newWordEmoji" class="input-control emoji-input" placeholder="🍪" maxlength="4" value="⭐">
@@ -394,12 +405,12 @@
               </select>
             </div>
             <input type="text" id="newWordCue" class="input-control" placeholder="Optional tip (e.g. Open wide and smile)" maxlength="60">
-            <button class="primary-cta full-width" type="submit">+ Add Word to Practice List</button>
+            <button class="primary-cta full-width" type="submit">+ Add Word to Words Mode</button>
           </form>
 
           <div class="word-media-section">
-            <h3>Record Real Video or Voice for Any Word</h3>
-            <p class="setting-help">Children often learn fastest watching mom, dad, or their speech therapist say each word. Videos stay stored privately on this tablet.</p>
+            <h3>Record Real Parent Video for Any Move or Word</h3>
+            <p class="setting-help">Children often love copying mom, dad, or their therapist. Videos stay stored privately on this tablet.</p>
             <div class="manage-words-list" id="manageWordsList"></div>
           </div>
         </div>
@@ -409,11 +420,11 @@
           <div class="stats-grid">
             <div class="stat-box">
               <span class="stat-num" id="statTotalAttempts">0</span>
-              <span class="stat-label">Total Lip Rewards</span>
+              <span class="stat-label">Total Stars</span>
             </div>
             <div class="stat-box">
               <span class="stat-num" id="statWordsPracticed">0</span>
-              <span class="stat-label">Words Practiced</span>
+              <span class="stat-label">Moves &amp; Words</span>
             </div>
             <div class="stat-box">
               <span class="stat-num" id="statCustomVideos">0</span>
@@ -436,8 +447,8 @@
     <div class="modal-sheet recorder-sheet">
       <div class="modal-header">
         <div>
-          <h2 id="recorderModalTitle">Record Video for "Mama"</h2>
-          <p class="modal-subtitle">Say the word slowly and clearly facing the camera (2–5 seconds)</p>
+          <h2 id="recorderModalTitle">Record Video</h2>
+          <p class="modal-subtitle">Demonstrate the move or word slowly facing the camera (2–6 seconds)</p>
         </div>
         <button class="close-btn" id="closeRecorderModalBtn" type="button" aria-label="Close recorder">✕</button>
       </div>
@@ -466,6 +477,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=2"></script>
+  <script type="module" src="js/app.js?v=3"></script>
 </body>
 </html>

@@ -1,8 +1,9 @@
 // ============================================================================
-// Emma's Voice — Main App Orchestration, Parent Studio & Video Recorder
+// Emma's Voice — Dual-Mode App Orchestration (Lips & Tongue Moves + Words)
 // ============================================================================
 
-import { DEFAULT_WORDS, SHAPE_LABELS, buildVisemeTimeline } from './words.js';
+import { ORAL_MOVES, MOVE_CATEGORIES } from './moves.js?v=3';
+import { DEFAULT_WORDS, SHAPE_LABELS, buildVisemeTimeline } from './words.js?v=3';
 import {
   loadSettings,
   saveSettings,
@@ -14,11 +15,11 @@ import {
   getWordVideo,
   deleteWordVideo,
   listSavedVideoWordIds,
-} from './storage.js';
-import { SpeechEngine } from './speech.js';
-import { ArticulationCoach } from './coach.js';
-import { LipTracker } from './lip-tracker.js?v=2';
-import { CelebrationOverlay } from './celebration.js';
+} from './storage.js?v=3';
+import { SpeechEngine } from './speech.js?v=3';
+import { ArticulationCoach } from './coach.js?v=3';
+import { LipTracker } from './lip-tracker.js?v=3';
+import { CelebrationOverlay } from './celebration.js?v=3';
 
 const LINE_STYLES = ['clean', 'detailed', 'minimal'];
 const LINE_STYLE_NAMES = {
@@ -27,16 +28,19 @@ const LINE_STYLE_NAMES = {
   minimal: 'Soft Halo',
 };
 
+const MOVE_CHEERS = ['Bravo!', 'Amazing!', 'You Did It!', 'Superstar!', 'Woohoo!'];
+
 const state = {
   settings: loadSettings(),
   customWords: loadCustomWords(),
   progress: loadProgress(),
   savedVideoIds: new Set(),
   activeCategory: 'all',
-  activeWordId: 'mama',
+  activeMoveId: ORAL_MOVES[0].id,
+  activeWordId: DEFAULT_WORDS[0].id,
   bannerTimer: null,
   // Video recorder modal state
-  recWordId: null,
+  recItemId: null,
   recStream: null,
   mediaRecorder: null,
   recChunks: [],
@@ -47,11 +51,18 @@ const state = {
   wasCameraRunningBeforeRec: false,
 };
 
+// Ensure practiceMode defaults to 'moves'
+if (!state.settings.practiceMode) {
+  state.settings.practiceMode = 'moves';
+}
+
 // DOM References
 const dom = {
   appTitle: document.getElementById('appTitle'),
   trackingStatusPill: document.getElementById('trackingStatusPill'),
   trackingStatusText: document.getElementById('trackingStatusText'),
+  modeMovesBtn: document.getElementById('modeMovesBtn'),
+  modeWordsBtn: document.getElementById('modeWordsBtn'),
   totalStarsValue: document.getElementById('totalStarsValue'),
   calmModeQuickBtn: document.getElementById('calmModeQuickBtn'),
   parentSettingsBtn: document.getElementById('parentSettingsBtn'),
@@ -85,8 +96,10 @@ const dom = {
   activeWordSpeakBtn: document.getElementById('activeWordSpeakBtn'),
   activeWordEmoji: document.getElementById('activeWordEmoji'),
   activeWordText: document.getElementById('activeWordText'),
+  activeSpeakBadge: document.getElementById('activeSpeakBadge'),
   activeWordCue: document.getElementById('activeWordCue'),
   activeWordStars: document.getElementById('activeWordStars'),
+  meterTitleLabel: document.getElementById('meterTitleLabel'),
   lipStateBadge: document.getElementById('lipStateBadge'),
   lipMeterFill: document.getElementById('lipMeterFill'),
   lipThresholdMarker: document.getElementById('lipThresholdMarker'),
@@ -102,6 +115,8 @@ const dom = {
   coachLoopBtn: document.getElementById('coachLoopBtn'),
   quickRecordVideoBtn: document.getElementById('quickRecordVideoBtn'),
 
+  listCardTitle: document.getElementById('listCardTitle'),
+  nextItemBtn: document.getElementById('nextItemBtn'),
   openAddWordBtn: document.getElementById('openAddWordBtn'),
   categoryTabs: document.getElementById('categoryTabs'),
   wordGrid: document.getElementById('wordGrid'),
@@ -179,25 +194,25 @@ const tracker = new LipTracker({
     const thrPct = Math.min(95, Math.max(10, Math.round(m.threshold * 100)));
     dom.lipMeterFill.style.width = `${pct}%`;
     dom.lipThresholdMarker.style.left = `${thrPct}%`;
-    dom.liveMetricsText.textContent = m.faceFound ? `Open ${m.openPct}%` : 'No face';
+    dom.liveMetricsText.textContent = m.faceFound ? (m.metricTag || `Open ${m.openPct}%`) : 'No face';
 
     dom.lipStateBadge.classList.remove('moving', 'triggered');
     if (!m.faceFound) {
       dom.lipStateBadge.textContent = 'Find face';
     } else if (m.state === 'reward') {
-      dom.lipStateBadge.textContent = 'Spoken! ★';
+      dom.lipStateBadge.textContent = isMovesMode() ? 'Matched! 🎉' : 'Spoken! ★';
       dom.lipStateBadge.classList.add('triggered');
     } else if (m.state === 'moving') {
-      dom.lipStateBadge.textContent = 'Lips moving!';
+      dom.lipStateBadge.textContent = isMovesMode() ? 'Almost there!' : 'Lips moving!';
       dom.lipStateBadge.classList.add('moving');
     } else if (m.inCooldown) {
-      dom.lipStateBadge.textContent = 'Ready soon…';
+      dom.lipStateBadge.textContent = 'Great job!';
     } else {
       dom.lipStateBadge.textContent = 'Watching';
     }
   },
   onLipTrigger: () => {
-    handleLipReinforcement();
+    handleMatchFelicitation();
   },
   onModelLoading: (isLoading, msg) => {
     dom.modelLoadingToast.classList.toggle('hidden', !isLoading);
@@ -209,11 +224,26 @@ const tracker = new LipTracker({
 // Helpers
 // ============================================================================
 
+function isMovesMode() {
+  return state.settings.practiceMode !== 'words';
+}
+
 function getAllWords() {
   return [...DEFAULT_WORDS, ...state.customWords];
 }
 
-function getActiveWord() {
+function getAllItemsForMode() {
+  return isMovesMode() ? ORAL_MOVES : getAllWords();
+}
+
+function getAllTrackableItems() {
+  return [...ORAL_MOVES, ...getAllWords()];
+}
+
+function getActiveItem() {
+  if (isMovesMode()) {
+    return ORAL_MOVES.find((m) => m.id === state.activeMoveId) || ORAL_MOVES[0];
+  }
   return getAllWords().find((w) => w.id === state.activeWordId) || DEFAULT_WORDS[0];
 }
 
@@ -222,23 +252,90 @@ function formatStars(count) {
   return '★'.repeat(filled) + '☆'.repeat(5 - filled);
 }
 
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
+}
+
+// ============================================================================
+// Mode Switching & UI Sync
+// ============================================================================
+
+function switchPracticeMode(mode) {
+  state.settings.practiceMode = mode === 'words' ? 'words' : 'moves';
+  state.activeCategory = 'all';
+  saveSettings(state.settings);
+  applySettingsToUI();
+  renderCategoryTabs();
+  const active = getActiveItem();
+  selectItem(active.id, { speakModel: false });
+}
+
+function renderCategoryTabs() {
+  const tabs = isMovesMode()
+    ? [
+        { id: 'all', label: 'All Moves' },
+        { id: 'lips', label: '👄 Lips' },
+        { id: 'tongue', label: '👅 Tongue' },
+        { id: 'cheeks', label: '🐡 Cheeks' },
+      ]
+    : [
+        { id: 'all', label: 'All' },
+        { id: 'starter', label: 'Starter' },
+        { id: 'needs', label: 'Needs' },
+        { id: 'play', label: 'Play' },
+        { id: 'custom', label: 'Custom' },
+      ];
+
+  dom.categoryTabs.innerHTML = '';
+  tabs.forEach((t) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `cat-chip${state.activeCategory === t.id ? ' active' : ''}`;
+    btn.dataset.cat = t.id;
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(state.activeCategory === t.id));
+    btn.textContent = t.label;
+    dom.categoryTabs.appendChild(btn);
+  });
+}
+
 function applySettingsToUI() {
   const s = state.settings;
+  const movesMode = isMovesMode();
   const displayName = (s.childName || 'Emma').trim();
+
   dom.appTitle.textContent = `${displayName}'s Voice`;
-  document.title = `${displayName}'s Voice — Lip-Tracking Speech Companion`;
+  document.title = `${displayName}'s Voice — Lips, Tongue & Speech Coach`;
+
+  // Mode Switcher Pills
+  dom.modeMovesBtn.classList.toggle('active', movesMode);
+  dom.modeMovesBtn.setAttribute('aria-selected', String(movesMode));
+  dom.modeWordsBtn.classList.toggle('active', !movesMode);
+  dom.modeWordsBtn.setAttribute('aria-selected', String(!movesMode));
+
+  // Panel headers & buttons
+  dom.listCardTitle.textContent = movesMode ? 'Moves to Learn' : 'Words to Learn';
+  dom.openAddWordBtn.classList.toggle('hidden', movesMode);
+  dom.meterTitleLabel.textContent = movesMode ? 'Move Match' : 'Lip Movement';
+  dom.activeSpeakBadge.textContent = movesMode ? '▶ Replay Move' : '🔊 Tap to hear';
 
   document.body.classList.toggle('calm-mode', Boolean(s.calmMode));
   dom.calmModeQuickBtn.setAttribute('aria-pressed', String(Boolean(s.calmMode)));
   dom.parentBtnLabel.textContent = s.childLock ? 'Parent (Hold)' : 'Parent';
 
-  // Sync tracker & speech & coach
+  const active = getActiveItem();
   tracker.updateSettings({
+    practiceMode: s.practiceMode,
+    targetMove: movesMode ? active.detector : 'openWide',
     detectionMode: s.detectionMode,
     sensitivity: s.sensitivity,
     cooldownSec: s.cooldownSec,
     lineStyle: s.lineStyle,
-    targetShape: getActiveWord().shape,
+    targetShape: !movesMode ? active.shape : 'open',
   });
   dom.linesStyleLabel.textContent = LINE_STYLE_NAMES[s.lineStyle] || 'Lip Lines';
 
@@ -271,7 +368,6 @@ function applySettingsToUI() {
   dom.chimeSetting.checked = Boolean(s.chimeEnabled);
   dom.praiseSetting.checked = Boolean(s.praiseEnabled);
 
-  // Update meter threshold preview
   const thr = Math.round((0.72 - s.sensitivity * 0.05) * 100);
   dom.lipThresholdMarker.style.left = `${Math.min(95, Math.max(10, thr))}%`;
 
@@ -280,31 +376,30 @@ function applySettingsToUI() {
 
 function updateProgressUI() {
   dom.totalStarsValue.textContent = String(state.progress.totalStars || 0);
-  const activeWord = getActiveWord();
-  const count = state.progress.byWord[activeWord.id] || 0;
+  const active = getActiveItem();
+  const count = state.progress.byWord[active.id] || 0;
   dom.activeWordStars.textContent = formatStars(count);
 
-  // Parent studio stats
   dom.statTotalAttempts.textContent = String(state.progress.totalStars || 0);
   const practicedCount = Object.values(state.progress.byWord).filter((n) => n > 0).length;
   dom.statWordsPracticed.textContent = String(practicedCount);
   dom.statCustomVideos.textContent = String(state.savedVideoIds.size);
 
   dom.progressWordList.innerHTML = '';
-  const practicedEntries = getAllWords()
-    .map((w) => ({ word: w, count: state.progress.byWord[w.id] || 0 }))
-    .filter((item) => item.count > 0)
+  const practicedEntries = getAllTrackableItems()
+    .map((item) => ({ item, count: state.progress.byWord[item.id] || 0 }))
+    .filter((entry) => entry.count > 0)
     .sort((a, b) => b.count - a.count);
 
   if (practicedEntries.length === 0) {
     dom.progressWordList.innerHTML =
-      '<p class="setting-help">No lip rewards recorded yet. Start the camera (or Demo Camera) and move lips to earn stars!</p>';
+      '<p class="setting-help">No stars earned yet. Start the camera (or Demo Camera) and copy a lip or tongue move!</p>';
   } else {
-    practicedEntries.forEach(({ word, count: c }) => {
+    practicedEntries.forEach(({ item, count: c }) => {
       const row = document.createElement('div');
       row.className = 'progress-row';
       row.innerHTML = `
-        <span>${word.emoji} ${escapeHtml(word.text)}</span>
+        <span>${item.emoji} ${escapeHtml(item.text)}</span>
         <span style="color:#d97706">${formatStars(c)} (${c})</span>
       `;
       dom.progressWordList.appendChild(row);
@@ -312,59 +407,82 @@ function updateProgressUI() {
   }
 }
 
-function escapeHtml(str) {
-  return String(str)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
-}
-
 // ============================================================================
-// Word Selection & Reinforcement
+// Selecting Moves / Words & Joyful Felicitation
 // ============================================================================
 
-async function selectWord(wordId, { speakModel = true } = {}) {
-  state.activeWordId = wordId;
-  const word = getActiveWord();
+async function selectItem(itemId, { speakModel = true } = {}) {
+  if (isMovesMode()) {
+    state.activeMoveId = itemId;
+  } else {
+    state.activeWordId = itemId;
+  }
 
-  dom.activeWordEmoji.textContent = word.emoji;
-  dom.activeWordText.textContent = word.text;
-  dom.activeWordCue.textContent = word.cue;
-  dom.lipShapeHint.textContent = `Goal: ${SHAPE_LABELS[word.shape] || 'Move lips'}`;
-  tracker.updateSettings({ targetShape: word.shape });
+  const item = getActiveItem();
+  dom.activeWordEmoji.textContent = item.emoji;
+  dom.activeWordText.textContent = item.text;
+  dom.activeWordCue.textContent = item.cue;
 
-  renderWordGrid();
+  if (isMovesMode()) {
+    dom.lipShapeHint.textContent = `Copy: ${item.text}!`;
+    tracker.updateSettings({ practiceMode: 'moves', targetMove: item.detector });
+  } else {
+    dom.lipShapeHint.textContent = `Goal: ${SHAPE_LABELS[item.shape] || 'Move lips'}`;
+    tracker.updateSettings({ practiceMode: 'words', targetShape: item.shape });
+  }
+
+  renderItemGrid();
   updateProgressUI();
 
-  const videoBlob = state.savedVideoIds.has(word.id) ? await getWordVideo(word.id) : null;
-  coach.setWord(word, videoBlob);
+  const videoBlob = state.savedVideoIds.has(item.id) ? await getWordVideo(item.id) : null;
+  coach.setItem(item, { isMoveMode: isMovesMode(), parentVideoBlob: videoBlob });
 
   if (speakModel) {
-    speech.speakWord(word.text, { isReward: false, slow: state.settings.coachSlow });
+    speech.speakWord(item.text, { isReward: false, slow: state.settings.coachSlow });
   }
 }
 
-function handleLipReinforcement() {
-  const word = getActiveWord();
+function selectNextItem() {
+  const list = getAllItemsForMode();
+  const active = getActiveItem();
+  const idx = list.findIndex((x) => x.id === active.id);
+  const next = list[(idx + 1) % list.length];
+  if (next) {
+    selectItem(next.id, { speakModel: !isMovesMode() });
+  }
+}
 
-  // 1. Immediately say the target word out loud!
-  speech.speakWord(word.text, { isReward: true });
+function handleMatchFelicitation() {
+  const item = getActiveItem();
+  const childName = (state.settings.childName || 'Emma').trim();
 
-  // 2. Increment star progress
+  // 1. Audio Reinforcement (Joyful Felicitation Fanfare + Spoken Cheer OR Word Out Loud)
+  if (isMovesMode()) {
+    speech.speakFelicitation(item.praise || item.text, childName);
+  } else {
+    speech.speakWord(item.text, { isReward: true });
+  }
+
+  // 2. Increment Star Progress
   state.progress.totalStars = (state.progress.totalStars || 0) + 1;
-  state.progress.byWord[word.id] = (state.progress.byWord[word.id] || 0) + 1;
+  state.progress.byWord[item.id] = (state.progress.byWord[item.id] || 0) + 1;
   saveProgress(state.progress);
   updateProgressUI();
-  renderWordGrid();
+  renderItemGrid();
 
-  // 3. Gentle celebration particles + joyful banner
-  celebration.burst({ calmMode: state.settings.calmMode });
+  // 3. Radiant Confetti, Stars & Sunburst Rings Felicitation!
+  celebration.burst({ calmMode: state.settings.calmMode, festive: isMovesMode() });
 
-  dom.reinforcementEmoji.textContent = word.emoji;
-  dom.reinforcementWord.textContent = `${word.text}!`;
-  const childName = (state.settings.childName || 'Emma').trim();
-  dom.reinforcementSub.textContent = `Way to go, ${childName}! ★`;
+  dom.reinforcementEmoji.textContent = item.emoji;
+  if (isMovesMode()) {
+    const cheer = MOVE_CHEERS[Math.floor(Math.random() * MOVE_CHEERS.length)];
+    dom.reinforcementWord.textContent = cheer;
+    dom.reinforcementSub.textContent = `${item.praise}, ${childName}! ★`;
+  } else {
+    dom.reinforcementWord.textContent = `${item.text}!`;
+    dom.reinforcementSub.textContent = `Way to go, ${childName}! ★`;
+  }
+
   dom.reinforcementBanner.classList.add('show');
   dom.activeWordSpeakBtn.classList.add('pulse');
 
@@ -372,49 +490,54 @@ function handleLipReinforcement() {
   state.bannerTimer = setTimeout(() => {
     dom.reinforcementBanner.classList.remove('show');
     dom.activeWordSpeakBtn.classList.remove('pulse');
-  }, 1900);
+  }, 2200);
 }
 
-function renderWordGrid() {
-  const all = getAllWords();
+function renderItemGrid() {
+  const all = getAllItemsForMode();
+  const active = getActiveItem();
+
   const filtered =
     state.activeCategory === 'all'
       ? all
       : state.activeCategory === 'custom'
         ? all.filter((w) => w.category === 'custom' || w.isCustom)
-        : all.filter((w) => w.category === state.activeCategory);
+        : all.filter((item) => item.category === state.activeCategory);
 
   dom.wordGrid.innerHTML = '';
 
   if (filtered.length === 0) {
     dom.wordGrid.innerHTML = `
       <div style="grid-column:1/-1;text-align:center;padding:24px 12px;color:#5a6d85;font-weight:800;">
-        No custom words yet. Tap <strong>+ Add Word</strong> to add Emma's favorite words!
+        No custom words yet. Tap <strong>+ Add Word</strong> to add favorite words!
       </div>
     `;
     return;
   }
 
-  filtered.forEach((word) => {
-    const count = state.progress.byWord[word.id] || 0;
-    const hasVideo = state.savedVideoIds.has(word.id);
+  filtered.forEach((item) => {
+    const count = state.progress.byWord[item.id] || 0;
+    const hasVideo = state.savedVideoIds.has(item.id);
     const tile = document.createElement('button');
     tile.type = 'button';
-    tile.className = `word-tile${word.id === state.activeWordId ? ' selected' : ''}`;
+    tile.className = `word-tile${item.id === active.id ? ' selected' : ''}`;
     tile.setAttribute('role', 'option');
-    tile.setAttribute('aria-selected', String(word.id === state.activeWordId));
+    tile.setAttribute('aria-selected', String(item.id === active.id));
+
+    const badgeText = isMovesMode()
+      ? MOVE_CATEGORIES[item.category] || 'Move'
+      : SHAPE_LABELS[item.shape] || 'Lip cue';
+
     tile.innerHTML = `
       ${hasVideo ? '<span class="video-dot" title="Parent video saved">🎥</span>' : ''}
-      <span class="word-tile-emoji">${word.emoji}</span>
-      <span class="word-tile-label">${escapeHtml(word.text)}</span>
-      <span class="word-tile-meta">
-        <span>${SHAPE_LABELS[word.shape] || 'Lip cue'}</span>
-      </span>
+      <span class="word-tile-emoji">${item.emoji}</span>
+      <span class="word-tile-label">${escapeHtml(item.text)}</span>
+      <span class="word-tile-meta"><span>${badgeText}</span></span>
       <span class="word-tile-stars">${formatStars(count)}</span>
     `;
     tile.addEventListener('click', () => {
       speech.unlockAudio();
-      selectWord(word.id, { speakModel: true });
+      selectItem(item.id, { speakModel: true });
     });
     dom.wordGrid.appendChild(tile);
   });
@@ -422,39 +545,40 @@ function renderWordGrid() {
 
 function renderManageWordsList() {
   dom.manageWordsList.innerHTML = '';
-  getAllWords().forEach((word) => {
-    const hasVideo = state.savedVideoIds.has(word.id);
+  getAllTrackableItems().forEach((item) => {
+    const hasVideo = state.savedVideoIds.has(item.id);
+    const isMove = item.id.startsWith('move-');
     const row = document.createElement('div');
     row.className = 'manage-word-row';
     row.innerHTML = `
       <div class="manage-word-info">
-        <span class="manage-word-emoji">${word.emoji}</span>
+        <span class="manage-word-emoji">${item.emoji}</span>
         <div>
-          <div class="manage-word-name">${escapeHtml(word.text)}</div>
-          <div class="manage-word-status">${hasVideo ? '🎥 Real parent video saved' : '🤖 Built-in articulation coach'}</div>
+          <div class="manage-word-name">${escapeHtml(item.text)} <span style="font-size:0.72rem;color:#64748b">(${isMove ? 'Move' : 'Word'})</span></div>
+          <div class="manage-word-status">${hasVideo ? '🎥 Real parent video saved' : '🤖 Built-in animation coach'}</div>
         </div>
       </div>
       <div class="manage-word-btns">
         <button class="small-btn primary" data-action="record" type="button">🎥 ${hasVideo ? 'Replace' : 'Record'}</button>
         ${hasVideo ? '<button class="small-btn danger" data-action="remove-video" type="button">Clear Video</button>' : ''}
-        ${word.isCustom ? '<button class="small-btn danger" data-action="delete-word" type="button">Delete</button>' : ''}
+        ${item.isCustom ? '<button class="small-btn danger" data-action="delete-word" type="button">Delete</button>' : ''}
       </div>
     `;
 
     row.querySelector('[data-action="record"]').addEventListener('click', () => {
-      openRecorderModal(word.id);
+      openRecorderModal(item.id);
     });
 
     const removeVideoBtn = row.querySelector('[data-action="remove-video"]');
     if (removeVideoBtn) {
       removeVideoBtn.addEventListener('click', async () => {
-        await deleteWordVideo(word.id);
-        state.savedVideoIds.delete(word.id);
+        await deleteWordVideo(item.id);
+        state.savedVideoIds.delete(item.id);
         renderManageWordsList();
-        renderWordGrid();
+        renderItemGrid();
         updateProgressUI();
-        if (state.activeWordId === word.id) {
-          selectWord(word.id, { speakModel: false });
+        if (getActiveItem().id === item.id) {
+          selectItem(item.id, { speakModel: false });
         }
       });
     }
@@ -462,16 +586,17 @@ function renderManageWordsList() {
     const delWordBtn = row.querySelector('[data-action="delete-word"]');
     if (delWordBtn) {
       delWordBtn.addEventListener('click', async () => {
-        state.customWords = state.customWords.filter((w) => w.id !== word.id);
+        state.customWords = state.customWords.filter((w) => w.id !== item.id);
         saveCustomWords(state.customWords);
-        if (state.savedVideoIds.has(word.id)) {
-          await deleteWordVideo(word.id);
-          state.savedVideoIds.delete(word.id);
+        if (state.savedVideoIds.has(item.id)) {
+          await deleteWordVideo(item.id);
+          state.savedVideoIds.delete(item.id);
         }
-        if (state.activeWordId === word.id) {
-          selectWord(DEFAULT_WORDS[0].id, { speakModel: false });
+        if (state.activeWordId === item.id) {
+          state.activeWordId = DEFAULT_WORDS[0].id;
+          if (!isMovesMode()) selectItem(state.activeWordId, { speakModel: false });
         }
-        renderWordGrid();
+        renderItemGrid();
         renderManageWordsList();
         updateProgressUI();
       });
@@ -571,7 +696,6 @@ function setupChildLockButton() {
     }
     dom.parentSettingsBtn.classList.remove('holding');
     if (state.settings.childLock && !heldEnough) {
-      const oldText = dom.parentBtnLabel.textContent;
       dom.parentBtnLabel.textContent = 'Hold 1.5s';
       setTimeout(() => {
         dom.parentBtnLabel.textContent = state.settings.childLock ? 'Parent (Hold)' : 'Parent';
@@ -589,12 +713,12 @@ function setupChildLockButton() {
 // Parent Real Video Recorder Modal
 // ============================================================================
 
-async function openRecorderModal(wordId) {
-  const word = getAllWords().find((w) => w.id === wordId) || getActiveWord();
-  state.recWordId = word.id;
+async function openRecorderModal(itemId) {
+  const item = getAllTrackableItems().find((x) => x.id === itemId) || getActiveItem();
+  state.recItemId = item.id;
   state.recBlob = null;
 
-  dom.recorderModalTitle.textContent = `Record Video for "${word.text}"`;
+  dom.recorderModalTitle.textContent = `Record Video for "${item.text}"`;
   dom.recorderErrorMsg.classList.add('hidden');
   dom.startRecBtn.classList.remove('hidden');
   dom.stopRecBtn.classList.add('hidden');
@@ -606,7 +730,6 @@ async function openRecorderModal(wordId) {
   dom.recorderPreviewVideo.muted = true;
   dom.recorderPreviewVideo.loop = false;
 
-  // Pause main camera temporarily so mobile/tablet Safari allows camera+mic capture
   state.wasCameraRunningBeforeRec = tracker.mode === 'camera';
   if (state.wasCameraRunningBeforeRec) {
     tracker.stop();
@@ -775,6 +898,16 @@ function populateVoices(voices) {
 // ============================================================================
 
 function bindEvents() {
+  // Primary Mode Switcher (Moves | Words)
+  dom.modeMovesBtn.addEventListener('click', () => {
+    speech.unlockAudio();
+    switchPracticeMode('moves');
+  });
+  dom.modeWordsBtn.addEventListener('click', () => {
+    speech.unlockAudio();
+    switchPracticeMode('words');
+  });
+
   // Camera start / demo / pause
   dom.startCameraBtn.addEventListener('click', enterLiveCamera);
   dom.startDemoBtn.addEventListener('click', enterDemoCamera);
@@ -799,15 +932,15 @@ function bindEvents() {
     tracker.triggerDemoLipMovement();
   });
 
-  // Active word tap to hear
+  // Active target tap to hear & replay
   dom.activeWordSpeakBtn.addEventListener('click', () => {
     speech.unlockAudio();
-    const w = getActiveWord();
-    speech.speakWord(w.text, { isReward: false, slow: state.settings.coachSlow });
+    const item = getActiveItem();
+    speech.speakWord(item.text, { isReward: false, slow: state.settings.coachSlow });
     coach.playOnce(true);
   });
 
-  // Top bar quick calm toggle
+  // Quick Calm Mode toggle
   dom.calmModeQuickBtn.addEventListener('click', () => {
     state.settings.calmMode = !state.settings.calmMode;
     saveSettings(state.settings);
@@ -823,10 +956,10 @@ function bindEvents() {
 
   dom.coachPlayBtn.addEventListener('click', () => {
     speech.unlockAudio();
-    const w = getActiveWord();
+    const item = getActiveItem();
     coach.playOnce(true);
     if (!coach.hasParentVideo) {
-      speech.speakWord(w.text, { isReward: false, slow: state.settings.coachSlow });
+      speech.speakWord(item.text, { isReward: false, slow: state.settings.coachSlow });
     }
   });
 
@@ -843,7 +976,12 @@ function bindEvents() {
   });
 
   dom.quickRecordVideoBtn.addEventListener('click', () => {
-    openRecorderModal(state.activeWordId);
+    openRecorderModal(getActiveItem().id);
+  });
+
+  dom.nextItemBtn.addEventListener('click', () => {
+    speech.unlockAudio();
+    selectNextItem();
   });
 
   dom.openAddWordBtn.addEventListener('click', () => {
@@ -861,7 +999,7 @@ function bindEvents() {
       c.classList.toggle('active', isActive);
       c.setAttribute('aria-selected', String(isActive));
     });
-    renderWordGrid();
+    renderItemGrid();
   });
 
   // Parent Modal
@@ -952,7 +1090,12 @@ function bindEvents() {
 
   dom.testVoiceBtn.addEventListener('click', () => {
     speech.unlockAudio();
-    speech.speakWord(getActiveWord().text, { isReward: true });
+    const item = getActiveItem();
+    if (isMovesMode()) {
+      speech.speakFelicitation(item.praise || item.text, state.settings.childName || 'Emma');
+    } else {
+      speech.speakWord(item.text, { isReward: true });
+    }
   });
 
   // Add Custom Word Form
@@ -988,7 +1131,9 @@ function bindEvents() {
     dom.newWordEmoji.value = '⭐';
 
     renderManageWordsList();
-    selectWord(newWord.id, { speakModel: true });
+    if (!isMovesMode()) {
+      selectItem(newWord.id, { speakModel: true });
+    }
   });
 
   // Reset Progress
@@ -996,7 +1141,7 @@ function bindEvents() {
     state.progress = { totalStars: 0, byWord: {} };
     saveProgress(state.progress);
     updateProgressUI();
-    renderWordGrid();
+    renderItemGrid();
   });
 
   // Video Recorder Modal Actions
@@ -1017,16 +1162,16 @@ function bindEvents() {
   });
 
   dom.saveRecBtn.addEventListener('click', async () => {
-    if (!state.recBlob || !state.recWordId) return;
-    await saveWordVideo(state.recWordId, state.recBlob);
-    state.savedVideoIds.add(state.recWordId);
-    renderWordGrid();
+    if (!state.recBlob || !state.recItemId) return;
+    await saveWordVideo(state.recItemId, state.recBlob);
+    state.savedVideoIds.add(state.recItemId);
+    renderItemGrid();
     renderManageWordsList();
     updateProgressUI();
-    const targetId = state.recWordId;
+    const targetId = state.recItemId;
     await closeRecorderModal();
-    if (state.activeWordId === targetId) {
-      selectWord(targetId, { speakModel: false });
+    if (getActiveItem().id === targetId) {
+      selectItem(targetId, { speakModel: false });
     }
   });
 
@@ -1052,7 +1197,8 @@ async function init() {
   speech.onVoicesChanged(populateVoices);
   bindEvents();
   applySettingsToUI();
-  await selectWord(state.activeWordId, { speakModel: false });
+  renderCategoryTabs();
+  await selectItem(getActiveItem().id, { speakModel: false });
 }
 
 init();

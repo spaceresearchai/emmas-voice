@@ -170,6 +170,40 @@ button, input, select {
   gap: 10px;
 }
 
+/* Mode Switcher Pill (Moves | Words) */
+.mode-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  box-shadow: var(--shadow-soft);
+}
+
+.mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 15px;
+  border: none;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.92rem;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.mode-tab.active {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.28);
+}
+
 .star-counter {
   display: inline-flex;
   align-items: center;
@@ -231,10 +265,10 @@ button, input, select {
   transform: scaleX(1);
 }
 
-/* Main Workspace Grid (Tablet Landscape Primary) */
+/* Main Workspace Grid (Tablet Landscape — Amplified Right Animation Stage!) */
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(320px, 1fr);
+  grid-template-columns: minmax(0, 1.24fr) minmax(370px, 1fr);
   gap: 14px;
   flex: 1;
   min-height: 0;
@@ -334,6 +368,7 @@ button, input, select {
 .swatch-outer { background: #38bdf8; }
 .swatch-vertical { background: #34d399; }
 .swatch-width { background: #fbbf24; }
+.swatch-tongue { background: #ec4899; }
 
 .legend-metrics {
   padding-left: 6px;
@@ -379,25 +414,25 @@ button, input, select {
   border-color: rgba(255, 255, 255, 0.25);
 }
 
-/* Gentle Reinforcement Banner */
+/* Joyful Felicitation Banner */
 .reinforcement-banner {
   position: absolute;
   left: 50%;
   bottom: 24px;
-  transform: translateX(-50%) translateY(20px) scale(0.92);
+  transform: translateX(-50%) translateY(24px) scale(0.86);
   opacity: 0;
   z-index: 7;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-  padding: 14px 32px;
-  border-radius: 26px;
-  background: rgba(255, 255, 255, 0.95);
-  border: 3px solid var(--mint);
-  box-shadow: 0 18px 40px rgba(16, 185, 129, 0.32);
+  gap: 3px;
+  padding: 16px 34px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, #ffffff 0%, #f0fdf4 100%);
+  border: 3.5px solid var(--mint);
+  box-shadow: 0 20px 48px rgba(16, 185, 129, 0.38), 0 0 0 6px rgba(251, 191, 36, 0.22);
   pointer-events: none;
-  transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.28s ease, transform 0.38s cubic-bezier(0.22, 1.25, 0.36, 1);
   text-align: center;
 }
 
@@ -406,8 +441,24 @@ button, input, select {
   transform: translateX(-50%) translateY(0) scale(1);
 }
 
+.felicitation-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.trophy-pop {
+  font-size: 1.65rem;
+  animation: gentleBounce 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes gentleBounce {
+  from { transform: translateY(0) rotate(-6deg); }
+  to { transform: translateY(-5px) rotate(6deg); }
+}
+
 .reinforcement-emoji {
-  font-size: 2.2rem;
+  font-size: 2.6rem;
   line-height: 1;
 }
 
@@ -419,7 +470,7 @@ button, input, select {
 }
 
 .reinforcement-sub {
-  font-size: 0.92rem;
+  font-size: 0.96rem;
   font-weight: 800;
   color: #059669;
 }
@@ -744,14 +795,21 @@ button, input, select {
 }
 
 .coach-card {
-  flex-shrink: 0;
+  flex: 1.28;
+  min-height: 0;
   gap: 10px;
 }
 
 .words-card {
   flex: 1;
   min-height: 0;
-  gap: 10px;
+  gap: 9px;
+}
+
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .card-header {
@@ -836,16 +894,17 @@ button, input, select {
   color: var(--text-muted);
 }
 
-/* Coach Video Stage */
+/* Amplified Coach Video Stage */
 .coach-stage {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 10;
-  max-height: 225px;
-  border-radius: 18px;
+  flex: 1;
+  min-height: 220px;
+  border-radius: 20px;
   overflow: hidden;
   background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
-  border: 1.5px solid #dbeafe;
+  border: 2px solid #bfdbfe;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.7);
 }
 
 #coachCanvas,
