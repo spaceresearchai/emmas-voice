@@ -1,137 +1,77 @@
 // ============================================================================
-// Three.js Realistic 3D Human Coach (Photorealistic Avaturn + Brunette GLBs)
-// Drives 72 ARKit + Oculus Viseme Blendshapes + Articulated 3D Tongue Motion
-// + Crisp 2D Directional Guide Overlay + Seamless Parent Video Support
+// Pixar-Style Cute 3D Animal Buddy Coach (Three.js — Bear, Puppy & Bunny)
+// Zero uncanny valley, instant 0ms load, 60fps smooth Lips, Tongue & Cheeks!
 // ============================================================================
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
-export const AVATAR_MODELS = {
-  realistic: {
-    label: 'Realistic 3D Person (Avaturn)',
-    url: 'https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@main/avatars/avaturn.glb',
+export const BUDDY_THEMES = {
+  bear: {
+    label: '🐻 Teddy Bear',
+    fur: 0xd9955f,
+    furSheen: 0xffd7b0,
+    muzzle: 0xfff0dc,
+    innerEar: 0xf7a8b8,
+    earFur: 0xc57d47,
+    nose: 0x4b2c20,
+    blush: 0xfb7185,
+    shirt: 0x3b82f6,
+    collar: 0x93c5fd,
+    earType: 'bear',
   },
-  friendly: {
-    label: 'Friendly 3D Coach (Brunette)',
-    url: 'https://cdn.jsdelivr.net/gh/met4citizen/TalkingHead@main/avatars/brunette.glb',
+  puppy: {
+    label: '🐶 Sunny Puppy',
+    fur: 0xe8ba82,
+    furSheen: 0xfff0d4,
+    muzzle: 0xfff8ed,
+    innerEar: 0xf6a5b4,
+    earFur: 0x9c6137,
+    nose: 0x3b2419,
+    blush: 0xf97592,
+    shirt: 0x10b981,
+    collar: 0x6ee7b7,
+    earType: 'puppy',
+  },
+  bunny: {
+    label: '🐰 Cozy Bunny',
+    fur: 0xfdf5ec,
+    furSheen: 0xffffff,
+    muzzle: 0xffffff,
+    innerEar: 0xf9a8d4,
+    earFur: 0xf5e8da,
+    nose: 0xf472b6,
+    blush: 0xf9a8d4,
+    shirt: 0x8b5cf6,
+    collar: 0xc4b5fd,
+    earType: 'bunny',
   },
 };
 
-// Map each pose key from moves.js / words.js directly to rich 52-ARKit blendshapes + tongue 3D bend!
-const ARKIT_POSES = {
-  rest: {
-    jawOpen: 0.02, mouthSmileLeft: 0.14, mouthSmileRight: 0.14,
-    mouthPucker: 0, mouthFunnel: 0, mouthPressLeft: 0, mouthPressRight: 0,
-    mouthClose: 0, mouthStretchLeft: 0, mouthStretchRight: 0,
-    cheekPuff: 0, tongueOut: 0, browInnerUp: 0.05,
-    jawLeft: 0, jawRight: 0, mouthUpperUpLeft: 0, mouthUpperUpRight: 0,
-    mouthLowerDownLeft: 0, mouthLowerDownRight: 0,
-    tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  closed: {
-    jawOpen: 0, mouthClose: 0.55, mouthPressLeft: 0.92, mouthPressRight: 0.92,
-    mouthRollLower: 0.42, mouthRollUpper: 0.35,
-    mouthSmileLeft: 0, mouthSmileRight: 0, mouthPucker: 0.08,
-    cheekPuff: 0, tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  openWide: {
-    jawOpen: 0.82, mouthOpen: 0.72, viseme_aa: 0.65,
-    mouthLowerDownLeft: 0.35, mouthLowerDownRight: 0.35,
-    browInnerUp: 0.22, mouthSmileLeft: 0.12, mouthSmileRight: 0.12,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  openBig: {
-    jawOpen: 1.0, mouthOpen: 0.92, viseme_aa: 0.8,
-    mouthLowerDownLeft: 0.55, mouthLowerDownRight: 0.55,
-    mouthUpperUpLeft: 0.22, mouthUpperUpRight: 0.22,
-    browInnerUp: 0.42, browOuterUpLeft: 0.3, browOuterUpRight: 0.3,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  openMid: {
-    jawOpen: 0.46, mouthOpen: 0.38, viseme_aa: 0.35,
-    mouthSmileLeft: 0.12, mouthSmileRight: 0.12,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  roundTight: {
-    jawOpen: 0.18, mouthPucker: 0.88, mouthFunnel: 0.55, viseme_U: 0.6,
-    browInnerUp: 0.18, tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  kissPucker: {
-    jawOpen: 0.12, mouthPucker: 1.0, mouthFunnel: 0.72, viseme_U: 0.65,
-    browInnerUp: 0.28, cheekSquintLeft: 0.15, cheekSquintRight: 0.15,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  roundOpen: {
-    jawOpen: 0.56, mouthFunnel: 0.82, mouthPucker: 0.48, viseme_O: 0.7,
-    browInnerUp: 0.2, tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  smile: {
-    jawOpen: 0.16, mouthSmileLeft: 0.85, mouthSmileRight: 0.85,
-    mouthStretchLeft: 0.32, mouthStretchRight: 0.32,
-    cheekSquintLeft: 0.38, cheekSquintRight: 0.38, viseme_I: 0.4,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  bigSmile: {
-    jawOpen: 0.24, mouthSmileLeft: 1.0, mouthSmileRight: 1.0, mouthSmile: 0.9,
-    mouthStretchLeft: 0.58, mouthStretchRight: 0.58,
-    mouthUpperUpLeft: 0.28, mouthUpperUpRight: 0.28,
-    cheekSquintLeft: 0.62, cheekSquintRight: 0.62, browOuterUpLeft: 0.2, browOuterUpRight: 0.2,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  tongueUp: {
-    jawOpen: 0.44, viseme_DD: 0.65, viseme_nn: 0.55, viseme_TH: 0.45,
-    mouthUpperUpLeft: 0.2, mouthUpperUpRight: 0.2,
-    tongueOut: 0.35, tongueBendX: 0, tongueBendY: -0.65, tongueExtend: 0.35,
-  },
-  teethLip: {
-    jawOpen: 0.08, viseme_FF: 0.9, mouthRollLower: 0.65,
-    mouthUpperUpLeft: 0.25, mouthUpperUpRight: 0.25,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
-  tongueOut: {
-    jawOpen: 0.68, mouthOpen: 0.58, tongueOut: 1.0,
-    mouthLowerDownLeft: 0.45, mouthLowerDownRight: 0.45,
-    browInnerUp: 0.3, browOuterUpLeft: 0.22, browOuterUpRight: 0.22,
-    tongueBendX: 0, tongueBendY: 0.15, tongueExtend: 1.0,
-  },
-  tongueLeft: {
-    jawOpen: 0.64, mouthOpen: 0.52, tongueOut: 1.0,
-    jawLeft: 0.32, mouthLeft: 0.35,
-    mouthLowerDownLeft: 0.4, mouthLowerDownRight: 0.4,
-    browInnerUp: 0.25,
-    tongueBendX: -1.0, tongueBendY: 0.08, tongueExtend: 0.95,
-  },
-  tongueRight: {
-    jawOpen: 0.64, mouthOpen: 0.52, tongueOut: 1.0,
-    jawRight: 0.32, mouthRight: 0.35,
-    mouthLowerDownLeft: 0.4, mouthLowerDownRight: 0.4,
-    browInnerUp: 0.25,
-    tongueBendX: 1.0, tongueBendY: 0.08, tongueExtend: 0.95,
-  },
-  tongueReachUp: {
-    jawOpen: 0.62, mouthOpen: 0.52, tongueOut: 1.0,
-    mouthUpperUpLeft: 0.38, mouthUpperUpRight: 0.38,
-    browInnerUp: 0.36,
-    tongueBendX: 0, tongueBendY: -1.0, tongueExtend: 0.92,
-  },
-  tongueReachDown: {
-    jawOpen: 0.78, mouthOpen: 0.68, tongueOut: 1.0,
-    mouthLowerDownLeft: 0.62, mouthLowerDownRight: 0.62,
-    browInnerUp: 0.28,
-    tongueBendX: 0, tongueBendY: 1.0, tongueExtend: 1.05,
-  },
-  cheekPuff: {
-    jawOpen: 0, mouthClose: 0.52, mouthPressLeft: 0.85, mouthPressRight: 0.85,
-    mouthPucker: 0.32, cheekPuff: 1.0,
-    browInnerUp: 0.35, eyeWideLeft: 0.28, eyeWideRight: 0.28,
-    tongueOut: 0, tongueBendX: 0, tongueBendY: 0, tongueExtend: 0,
-  },
+// Expressive oral-motor + speech viseme pose parameters
+const BUDDY_POSES = {
+  // open: 0..1.1, width: 0.48..1.38, pucker: 0..1, press: 0..1, smile: 0..1,
+  // cheekPuff: 0..1, tongueOut: 0..1.1, tongueX: -1..1, tongueY: -1..1,
+  // tongueIn: 0..1, teethLip: 0..1, browLift: 0..1, earPerk: 0..1
+  rest:            { open: 0.04, width: 0.96, pucker: 0.0, press: 0.0, smile: 0.22, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.05, earPerk: 0.0 },
+  closed:          { open: 0.00, width: 0.90, pucker: 0.1, press: 1.0, smile: 0.00, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.15, earPerk: 0.1 },
+  openWide:        { open: 0.88, width: 1.04, pucker: 0.0, press: 0.0, smile: 0.15, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.15, teethLip: 0.0, browLift: 0.45, earPerk: 0.35 },
+  openBig:         { open: 1.08, width: 1.08, pucker: 0.0, press: 0.0, smile: 0.18, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.10, teethLip: 0.0, browLift: 0.72, earPerk: 0.55 },
+  openMid:         { open: 0.52, width: 1.00, pucker: 0.0, press: 0.0, smile: 0.15, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.15, teethLip: 0.0, browLift: 0.22, earPerk: 0.15 },
+  roundTight:      { open: 0.26, width: 0.54, pucker: 0.85, press: 0.0, smile: 0.00, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.35, earPerk: 0.25 },
+  kissPucker:      { open: 0.20, width: 0.46, pucker: 1.0, press: 0.0, smile: 0.00, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.55, earPerk: 0.45 },
+  roundOpen:       { open: 0.68, width: 0.66, pucker: 0.55, press: 0.0, smile: 0.00, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.38, earPerk: 0.30 },
+  smile:           { open: 0.24, width: 1.24, pucker: 0.0, press: 0.0, smile: 0.82, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.35, earPerk: 0.45 },
+  bigSmile:        { open: 0.36, width: 1.38, pucker: 0.0, press: 0.0, smile: 1.00, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.58, earPerk: 0.72 },
+  tongueUp:        { open: 0.48, width: 0.98, pucker: 0.0, press: 0.0, smile: 0.12, cheekPuff: 0.0, tongueOut: 0.32, tongueX: 0.0, tongueY: -0.75, tongueIn: 0.9, teethLip: 0.0, browLift: 0.30, earPerk: 0.25 },
+  teethLip:        { open: 0.10, width: 1.02, pucker: 0.0, press: 0.2, smile: 0.10, cheekPuff: 0.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 1.0, browLift: 0.15, earPerk: 0.10 },
+  // Explicit Tongue & Cheek Moves!
+  tongueOut:       { open: 0.74, width: 1.02, pucker: 0.0, press: 0.0, smile: 0.24, cheekPuff: 0.0, tongueOut: 1.0, tongueX: 0.0, tongueY: 0.22, tongueIn: 0.0, teethLip: 0.0, browLift: 0.55, earPerk: 0.60 },
+  tongueLeft:      { open: 0.70, width: 1.02, pucker: 0.0, press: 0.0, smile: 0.22, cheekPuff: 0.0, tongueOut: 0.96, tongueX: -0.95, tongueY: 0.12, tongueIn: 0.0, teethLip: 0.0, browLift: 0.48, earPerk: 0.55 },
+  tongueRight:     { open: 0.70, width: 1.02, pucker: 0.0, press: 0.0, smile: 0.22, cheekPuff: 0.0, tongueOut: 0.96, tongueX: 0.95, tongueY: 0.12, tongueIn: 0.0, teethLip: 0.0, browLift: 0.48, earPerk: 0.55 },
+  tongueReachUp:   { open: 0.74, width: 1.00, pucker: 0.0, press: 0.0, smile: 0.18, cheekPuff: 0.0, tongueOut: 0.95, tongueX: 0.0, tongueY: -0.95, tongueIn: 0.0, teethLip: 0.0, browLift: 0.65, earPerk: 0.65 },
+  tongueReachDown: { open: 0.82, width: 1.00, pucker: 0.0, press: 0.0, smile: 0.15, cheekPuff: 0.0, tongueOut: 1.08, tongueX: 0.0, tongueY: 1.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.52, earPerk: 0.55 },
+  cheekPuff:       { open: 0.00, width: 0.78, pucker: 0.35, press: 0.92, smile: 0.05, cheekPuff: 1.0, tongueOut: 0.0, tongueX: 0.0, tongueY: 0.0, tongueIn: 0.0, teethLip: 0.0, browLift: 0.68, earPerk: 0.70 },
 };
-
-const ALL_MORPH_KEYS = Array.from(
-  new Set(Object.values(ARKIT_POSES).flatMap((p) => Object.keys(p)))
-).filter((k) => !k.startsWith('tongueBend') && k !== 'tongueExtend');
 
 export class ThreeCoach {
   constructor({ stageEl, guideCanvas, videoEl, syllableStripEl, modeBadgeEl, loadingEl }) {
@@ -148,12 +88,12 @@ export class ThreeCoach {
     this.showLines = true;
     this.slowMode = false;
     this.loopEnabled = true;
-    this.avatarKey = 'realistic';
+    this.buddyKey = 'bear';
 
     this.hasParentVideo = false;
     this.currentVideoUrl = null;
 
-    // Animation timeline state
+    // Animation state
     this.playing = false;
     this.elapsedMs = 0;
     this.loopWaitMs = 0;
@@ -163,32 +103,17 @@ export class ThreeCoach {
     this.blinkPhase = 0;
     this.activeStepIdx = -1;
 
-    // Smooth current morph & tongue values
-    this.currentValues = {};
-    this.targetValues = { ...ARKIT_POSES.rest };
-    ALL_MORPH_KEYS.forEach((k) => (this.currentValues[k] = ARKIT_POSES.rest[k] || 0));
-    this.currentValues.tongueBendX = 0;
-    this.currentValues.tongueBendY = 0;
-    this.currentValues.tongueExtend = 0;
+    this.currentPose = { ...BUDDY_POSES.rest };
+    this.targetPose = { ...BUDDY_POSES.rest };
 
-    // Subtle pointer tilt so user can inspect lips/tongue from a slight side angle
+    // Interactive peek tilt
     this.pointerYaw = 0;
     this.pointerPitch = 0;
     this.targetYaw = 0;
     this.targetPitch = 0;
 
-    // Three.js scene objects
-    this.renderer = null;
-    this.scene = null;
-    this.camera = null;
-    this.avatarRoot = null;
-    this.headBone = null;
-    this.morphMeshes = [];
-    this.customTongueGroup = null;
-    this.customTongueMesh = null;
-    this.mouthAnchorLocal = new THREE.Vector3(0, -0.045, 0.085);
-    this.mouthScreenPos = { x: 0.5, y: 0.62 };
-    this.modelReady = false;
+    this.mouthScreenPos = { x: 0.5, y: 0.64 };
+    this.parts = {};
     this.webglOk = false;
 
     this._initThree();
@@ -198,7 +123,9 @@ export class ThreeCoach {
     this._resizeObserver.observe(this.stageEl);
     this._syncSize();
 
-    this.loadAvatar(this.avatarKey);
+    this.loadAvatar(this.buddyKey);
+    if (this.loadingEl) this.loadingEl.classList.add('hidden');
+
     this._raf = requestAnimationFrame((ts) => this._tick(ts));
   }
 
@@ -217,40 +144,49 @@ export class ThreeCoach {
       this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       this.renderer.outputColorSpace = THREE.SRGBColorSpace;
       this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-      this.renderer.toneMappingExposure = 1.12;
+      this.renderer.toneMappingExposure = 1.08;
 
       this.scene = new THREE.Scene();
 
-      // Portrait lens (28° FOV = flattering natural face proportions, zero fisheye!)
-      this.camera = new THREE.PerspectiveCamera(26, 4 / 3, 0.05, 20);
-      this.camera.position.set(0, 1.62, 0.72);
-      this.camera.lookAt(0, 1.60, 0);
+      this.camera = new THREE.PerspectiveCamera(30, 4 / 3, 0.1, 30);
+      this.camera.position.set(0, 0.12, 4.35);
+      this.camera.lookAt(0, 0.04, 0);
 
-      // Soft warm 3-point photography studio lighting
-      const hemi = new THREE.HemisphereLight(0xf4f9ff, 0xffe0c2, 1.35);
+      // Warm Pixar 3-point soft lighting
+      const hemi = new THREE.HemisphereLight(0xf6fbff, 0xffe4c4, 1.35);
       this.scene.add(hemi);
 
-      const keyLight = new THREE.DirectionalLight(0xfffaf2, 1.75);
-      keyLight.position.set(0.65, 1.9, 1.45);
+      const keyLight = new THREE.DirectionalLight(0xfffaf0, 1.55);
+      keyLight.position.set(2.4, 3.2, 4.2);
       this.scene.add(keyLight);
 
-      const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.9);
-      fillLight.position.set(-0.9, 1.65, 1.1);
+      const fillLight = new THREE.DirectionalLight(0xdbeafe, 0.85);
+      fillLight.position.set(-3.0, 1.4, 3.2);
       this.scene.add(fillLight);
 
-      // Gentle mouth-interior fill light so teeth & tongue are vividly lit!
-      const mouthLight = new THREE.PointLight(0xfff1f2, 0.55, 1.2);
-      mouthLight.position.set(0, 1.54, 0.45);
-      this.scene.add(mouthLight);
-      this.mouthLight = mouthLight;
-
-      const rimLight = new THREE.DirectionalLight(0xe0f2fe, 0.65);
-      rimLight.position.set(0, 2.2, -1.2);
+      const rimLight = new THREE.DirectionalLight(0xfff7ed, 0.95);
+      rimLight.position.set(0.2, 2.8, -3.5);
       this.scene.add(rimLight);
+
+      // Soft floating pastel sparkles in background
+      this.sparkles = new THREE.Group();
+      const sparkleMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.45 });
+      const sparklePos = [
+        [-1.75, 0.88, -1.6, 0.16],
+        [1.82, 0.72, -1.5, 0.13],
+        [-1.55, -0.62, -1.8, 0.11],
+        [1.62, -0.52, -1.4, 0.14],
+      ];
+      sparklePos.forEach(([x, y, z, r]) => {
+        const dot = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 16), sparkleMat);
+        dot.position.set(x, y, z);
+        this.sparkles.add(dot);
+      });
+      this.scene.add(this.sparkles);
 
       this.webglOk = true;
     } catch (err) {
-      console.warn('Three.js WebGL init failed:', err);
+      console.warn('Three.js init error:', err);
       this.webglOk = false;
     }
   }
@@ -271,7 +207,7 @@ export class ThreeCoach {
       if (!dragging) return;
       const dx = (e.clientX - startX) / 140;
       const dy = (e.clientY - startY) / 160;
-      this.targetYaw = THREE.MathUtils.clamp(dx * 0.55, -0.52, 0.52);
+      this.targetYaw = THREE.MathUtils.clamp(dx * 0.58, -0.58, 0.58);
       this.targetPitch = THREE.MathUtils.clamp(dy * 0.25, -0.22, 0.22);
     });
 
@@ -284,213 +220,378 @@ export class ThreeCoach {
     window.addEventListener('pointercancel', endDrag);
   }
 
-  async loadAvatar(avatarKey = 'realistic') {
+  loadAvatar(buddyKey = 'bear') {
     if (!this.webglOk) return;
-    this.avatarKey = AVATAR_MODELS[avatarKey] ? avatarKey : 'realistic';
-    const meta = AVATAR_MODELS[this.avatarKey];
+    this.buddyKey = BUDDY_THEMES[buddyKey] ? buddyKey : 'bear';
+    const theme = BUDDY_THEMES[this.buddyKey];
 
-    this.modelReady = false;
-    this._setLoading(true, `Loading ${meta.label}…`);
-
-    const loader = new GLTFLoader();
-    loader.setCrossOrigin('anonymous');
-
-    const tryLoad = (url) =>
-      new Promise((resolve, reject) => {
-        loader.load(
-          url,
-          (gltf) => resolve(gltf),
-          (xhr) => {
-            if (xhr.total > 0) {
-              const pct = Math.min(99, Math.round((xhr.loaded / xhr.total) * 100));
-              this._setLoading(true, `Loading 3D coach (${pct}%)…`);
-            }
-          },
-          (err) => reject(err)
-        );
-      });
-
-    try {
-      let gltf;
-      try {
-        gltf = await tryLoad(meta.url);
-      } catch (err) {
-        if (this.avatarKey === 'realistic') {
-          console.warn('Avaturn load failed, falling back to Brunette GLB:', err);
-          gltf = await tryLoad(AVATAR_MODELS.friendly.url);
-        } else {
-          throw err;
-        }
-      }
-
-      this._mountAvatar(gltf.scene);
-      this.modelReady = true;
-      this._setLoading(false);
-    } catch (err) {
-      console.error('Could not load 3D avatar:', err);
-      this._setLoading(true, '3D model offline — try Record Video');
+    if (this.buddyRoot) {
+      this.scene.remove(this.buddyRoot);
     }
-  }
 
-  _mountAvatar(root) {
-    if (this.avatarRoot) {
-      this.scene.remove(this.avatarRoot);
-    }
-    this.avatarRoot = root;
-    this.morphMeshes = [];
-    this.headBone = null;
-    let headMesh = null;
-    let teethMesh = null;
-    let nativeTongueMesh = null;
+    const root = new THREE.Group();
+    const headGroup = new THREE.Group();
+    headGroup.position.set(0, 0.16, 0);
+    root.add(headGroup);
 
-    root.traverse((obj) => {
-      if (obj.isBone) {
-        if (obj.name === 'Head' || obj.name === 'mixamorigHead') {
-          this.headBone = obj;
-        }
-        // Relax T-pose arms naturally down at her sides for a clean studio portrait!
-        if (obj.name === 'LeftArm' || obj.name === 'mixamorigLeftArm') {
-          obj.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), -1.18);
-          obj.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), 0.08);
-        }
-        if (obj.name === 'RightArm' || obj.name === 'mixamorigRightArm') {
-          obj.rotateOnWorldAxis(new THREE.Vector3(0, 0, 1), 1.18);
-          obj.rotateOnWorldAxis(new THREE.Vector3(1, 0, 0), 0.08);
-        }
-      }
-      if (obj.isMesh) {
-        // Hide glasses if present so eyes are super clear and expressive for the child!
-        if (obj.name.toLowerCase().includes('glasses')) {
-          obj.visible = false;
-        }
-        if (obj.morphTargetDictionary && obj.morphTargetInfluences) {
-          this.morphMeshes.push(obj);
-        }
-        if (obj.name === 'Head_Mesh' || obj.name === 'Wolf3D_Head') headMesh = obj;
-        if (obj.name === 'Teeth_Mesh' || obj.name === 'Wolf3D_Teeth') teethMesh = obj;
-        if (obj.name === 'Tongue_Mesh') nativeTongueMesh = obj;
-
-        // Warm realistic skin/tongue shading tweaks
-        if (obj.material) {
-          const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-          mats.forEach((m) => {
-            if (obj.name === 'Tongue_Mesh') {
-              m.roughness = 0.28;
-              m.metalness = 0.0;
-            }
-          });
-        }
-      }
+    // Plush Velvet Materials
+    const furMat = new THREE.MeshPhysicalMaterial({
+      color: theme.fur,
+      roughness: 0.78,
+      metalness: 0.0,
+      sheen: 0.88,
+      sheenRoughness: 0.68,
+      sheenColor: new THREE.Color(theme.furSheen),
     });
+
+    const earFurMat = new THREE.MeshPhysicalMaterial({
+      color: theme.earFur,
+      roughness: 0.80,
+      metalness: 0.0,
+      sheen: 0.75,
+      sheenRoughness: 0.72,
+      sheenColor: new THREE.Color(theme.furSheen),
+    });
+
+    const muzzleMat = new THREE.MeshPhysicalMaterial({
+      color: theme.muzzle,
+      roughness: 0.74,
+      metalness: 0.0,
+      sheen: 0.65,
+      sheenRoughness: 0.70,
+      sheenColor: new THREE.Color(0xffffff),
+    });
+
+    const innerEarMat = new THREE.MeshPhysicalMaterial({
+      color: theme.innerEar,
+      roughness: 0.62,
+      metalness: 0.0,
+      sheen: 0.5,
+      sheenColor: new THREE.Color(0xffe4e6),
+    });
+
+    const blushMat = new THREE.MeshPhysicalMaterial({
+      color: theme.blush,
+      roughness: 0.65,
+      transparent: true,
+      opacity: 0.34,
+    });
+
+    const shirtMat = new THREE.MeshPhysicalMaterial({
+      color: theme.shirt,
+      roughness: 0.72,
+      sheen: 0.6,
+      sheenColor: new THREE.Color(theme.collar),
+    });
+
+    // 1. Cozy Shoulders & Sweater Collar
+    const torso = new THREE.Mesh(new THREE.SphereGeometry(0.95, 32, 24), shirtMat);
+    torso.scale.set(1.22, 0.78, 0.85);
+    torso.position.set(0, -1.16, -0.06);
+    root.add(torso);
+
+    const collar = new THREE.Mesh(
+      new THREE.TorusGeometry(0.42, 0.09, 16, 32),
+      new THREE.MeshPhysicalMaterial({ color: theme.collar, roughness: 0.65 })
+    );
+    collar.rotation.x = Math.PI / 2;
+    collar.position.set(0, -0.68, 0.02);
+    root.add(collar);
+
+    // 2. Plush Head (slightly pear-shaped chubby toddler-plush silhouette!)
+    const headGeo = new THREE.SphereGeometry(0.92, 42, 34);
+    const hp = headGeo.attributes.position;
+    for (let i = 0; i < hp.count; i++) {
+      let x = hp.getX(i);
+      let y = hp.getY(i);
+      let z = hp.getZ(i);
+      // Softly wider cheeks below midline, gently rounded forehead
+      const lowerBulge = y < 0 ? 1 + Math.min(0.11, -y * 0.14) : 1 - y * 0.04;
+      x *= 1.07 * lowerBulge;
+      y *= 0.97;
+      z *= 0.96;
+      hp.setXYZ(i, x, y, z);
+    }
+    headGeo.computeVertexNormals();
+    const headMesh = new THREE.Mesh(headGeo, furMat);
+    headGroup.add(headMesh);
+
+    // Cute soft forehead hair tuft
+    const tuftGroup = new THREE.Group();
+    const tuft1 = new THREE.Mesh(new THREE.SphereGeometry(0.14, 18, 16), furMat);
+    tuft1.scale.set(1.2, 0.75, 0.9);
+    tuft1.position.set(-0.04, 0.88, 0.22);
+    const tuft2 = new THREE.Mesh(new THREE.SphereGeometry(0.11, 18, 16), furMat);
+    tuft2.scale.set(1.0, 0.9, 0.85);
+    tuft2.position.set(0.09, 0.87, 0.18);
+    tuftGroup.add(tuft1, tuft2);
+    headGroup.add(tuftGroup);
+
+    // 3. Animal-Specific Ears (Bear / Puppy / Bunny!)
+    const leftEarPivot = new THREE.Group();
+    const rightEarPivot = new THREE.Group();
+    if (theme.earType === 'bear') {
+      leftEarPivot.position.set(-0.76, 0.64, -0.06);
+      rightEarPivot.position.set(0.76, 0.64, -0.06);
+      [leftEarPivot, rightEarPivot].forEach((piv) => {
+        const outer = new THREE.Mesh(new THREE.SphereGeometry(0.32, 26, 20), earFurMat);
+        outer.scale.set(1.0, 1.0, 0.52);
+        const inner = new THREE.Mesh(new THREE.SphereGeometry(0.20, 22, 18), innerEarMat);
+        inner.scale.set(1.0, 1.0, 0.40);
+        inner.position.set(0, -0.02, 0.10);
+        piv.add(outer, inner);
+      });
+    } else if (theme.earType === 'puppy') {
+      leftEarPivot.position.set(-0.84, 0.42, -0.02);
+      rightEarPivot.position.set(0.84, 0.42, -0.02);
+      [
+        { piv: leftEarPivot, sign: -1 },
+        { piv: rightEarPivot, sign: 1 },
+      ].forEach(({ piv, sign }) => {
+        const ear = new THREE.Mesh(new THREE.SphereGeometry(0.34, 24, 20), earFurMat);
+        ear.scale.set(0.68, 1.52, 0.44);
+        ear.position.set(sign * 0.14, -0.34, 0.04);
+        ear.rotation.z = sign * 0.24;
+        piv.add(ear);
+      });
+    } else {
+      // Cozy Bunny velvety ears (proportioned cleanly inside the portrait frame!)
+      leftEarPivot.position.set(-0.36, 0.72, -0.06);
+      rightEarPivot.position.set(0.36, 0.72, -0.06);
+      [
+        { piv: leftEarPivot, sign: -1 },
+        { piv: rightEarPivot, sign: 1 },
+      ].forEach(({ piv, sign }) => {
+        const outer = new THREE.Mesh(new THREE.SphereGeometry(0.23, 24, 20), earFurMat);
+        outer.scale.set(0.84, 1.62, 0.46);
+        outer.position.set(sign * 0.12, 0.28, 0);
+        outer.rotation.z = -sign * 0.28;
+        const inner = new THREE.Mesh(new THREE.SphereGeometry(0.13, 20, 16), innerEarMat);
+        inner.scale.set(0.76, 1.40, 0.35);
+        inner.position.set(sign * 0.12, 0.27, 0.075);
+        inner.rotation.z = -sign * 0.28;
+        piv.add(outer, inner);
+      });
+    }
+    headGroup.add(leftEarPivot, rightEarPivot);
+
+    // 4. Soft Muzzle & Inflatable Rosy Cheeks (for Puff Cheeks!)
+    const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.56, 34, 26), muzzleMat);
+    muzzle.scale.set(1.16, 0.88, 0.72);
+    muzzle.position.set(0, -0.24, 0.56);
+    headGroup.add(muzzle);
+
+    // Inflatable 3D Cheek Puffs (smoothly blend into sides of muzzle & pop out when puffing!)
+    const cheekLeft = new THREE.Mesh(new THREE.SphereGeometry(0.32, 26, 20), furMat);
+    cheekLeft.position.set(-0.62, -0.18, 0.52);
+    cheekLeft.scale.set(0.85, 0.76, 0.62);
+    const cheekRight = cheekLeft.clone();
+    cheekRight.position.x = 0.62;
+    headGroup.add(cheekLeft, cheekRight);
+
+    const blushLeft = new THREE.Mesh(new THREE.SphereGeometry(0.20, 20, 16), blushMat);
+    blushLeft.scale.set(1.05, 0.68, 0.16);
+    blushLeft.position.set(-0.58, -0.10, 0.72);
+    blushLeft.rotation.y = -0.45;
+    const blushRight = blushLeft.clone();
+    blushRight.position.x = 0.58;
+    blushRight.rotation.y = 0.45;
+    headGroup.add(blushLeft, blushRight);
+
+    // 5. Big Glossy Pixar Eyes with Dual Sparkle Catchlights + Blinking Lids
+    const leftEye = this._buildPixarEye(furMat);
+    leftEye.group.position.set(-0.37, 0.20, 0.78);
+    leftEye.group.rotation.y = -0.16;
+
+    const rightEye = this._buildPixarEye(furMat);
+    rightEye.group.position.set(0.37, 0.20, 0.78);
+    rightEye.group.rotation.y = 0.16;
+    headGroup.add(leftEye.group, rightEye.group);
+
+    // Expressive Friendly Gently-Arched Eyebrows (warm Disney/Pixar angle!)
+    const browMat = new THREE.MeshPhysicalMaterial({ color: 0x6b442e, roughness: 0.72 });
+    const leftBrow = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.16, 8, 14), browMat);
+    leftBrow.rotation.z = Math.PI / 2 + 0.16;
+    leftBrow.position.set(-0.38, 0.48, 0.78);
+
+    const rightBrow = new THREE.Mesh(new THREE.CapsuleGeometry(0.032, 0.16, 8, 14), browMat);
+    rightBrow.rotation.z = Math.PI / 2 - 0.16;
+    rightBrow.position.set(0.38, 0.48, 0.78);
+    headGroup.add(leftBrow, rightBrow);
+
+    // Cute Rounded Glossy Nose
+    const nose = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 24, 18),
+      new THREE.MeshPhysicalMaterial({
+        color: theme.nose,
+        roughness: 0.22,
+        clearcoat: 0.75,
+        clearcoatRoughness: 0.18,
+      })
+    );
+    nose.scale.set(1.24, 0.88, 0.85);
+    nose.position.set(0, -0.02, 0.96);
+    headGroup.add(nose);
+
+    // =========================================================================
+    // 6. ULTRA-CLEAR 3D MOUTH, PLUSH LIPS, TEETH & ARTICULATED PINK TONGUE!
+    // =========================================================================
+    const mouthAnchor = new THREE.Group();
+    mouthAnchor.position.set(0, -0.34, 0.89);
+    headGroup.add(mouthAnchor);
+
+    // Dark warm oral cavity backdrop
+    const cavityMat = new THREE.MeshStandardMaterial({ color: 0x581322, roughness: 0.9 });
+    const mouthCavity = new THREE.Mesh(new THREE.SphereGeometry(0.28, 26, 20), cavityMat);
+    mouthCavity.scale.set(1.0, 0.15, 0.42);
+    mouthCavity.position.set(0, 0, -0.05);
+    mouthAnchor.add(mouthCavity);
+
+    // Cute rounded upper teeth (bright soft ivory)
+    const teethMat = new THREE.MeshPhysicalMaterial({
+      color: 0xfffef9,
+      roughness: 0.18,
+      clearcoat: 0.5,
+    });
+    const upperTeeth = new THREE.Mesh(new THREE.BoxGeometry(0.30, 0.085, 0.08), teethMat);
+    upperTeeth.position.set(0, 0.07, 0.02);
+    mouthAnchor.add(upperTeeth);
+
+    // Continuous Seamless 3D Plush Lip Ring (zero corner gaps at every pose!)
+    const lipMat = new THREE.MeshPhysicalMaterial({
+      color: 0xe66a81,
+      roughness: 0.36,
+      clearcoat: 0.3,
+      clearcoatRoughness: 0.35,
+      sheen: 0.45,
+      sheenColor: new THREE.Color(0xffc2ce),
+    });
+
+    const lipRing = new THREE.Mesh(new THREE.TorusGeometry(0.245, 0.042, 20, 48), lipMat);
+    lipRing.position.set(0, 0, 0.035);
+    mouthAnchor.add(lipRing);
+
+    // Soft closed-lip pill bar (used cleanly when lips are pressed tight shut!)
+    const closedLipBar = new THREE.Mesh(new THREE.CapsuleGeometry(0.042, 0.36, 10, 18), lipMat);
+    closedLipBar.rotation.z = Math.PI / 2;
+    closedLipBar.position.set(0, 0, 0.05);
+    closedLipBar.visible = false;
+    mouthAnchor.add(closedLipBar);
+
+    // Expressive Glossy 3D Pink Tongue (articulated pivot inside mouth!)
+    const tonguePivot = new THREE.Group();
+    tonguePivot.position.set(0, -0.03, -0.02);
+    mouthAnchor.add(tonguePivot);
+
+    const tGeo = new THREE.SphereGeometry(1, 28, 22);
+    const tp = tGeo.attributes.position;
+    for (let i = 0; i < tp.count; i++) {
+      let x = tp.getX(i);
+      let y = tp.getY(i);
+      let z = tp.getZ(i);
+      const tipTaper = z > 0 ? 1 - z * 0.24 : 1;
+      x *= 0.175 * tipTaper;
+      const groove = y > 0 ? Math.exp(-Math.pow(x / 0.055, 2)) * 0.022 : 0;
+      y = y * 0.072 - groove;
+      z = (z + 0.72) * 0.26;
+      tp.setXYZ(i, x, y, z);
+    }
+    tGeo.computeVertexNormals();
+
+    const tongueMat = new THREE.MeshPhysicalMaterial({
+      color: 0xfb7185,
+      roughness: 0.24,
+      clearcoat: 0.65,
+      clearcoatRoughness: 0.2,
+      sheen: 0.45,
+      sheenColor: new THREE.Color(0xffcad4),
+    });
+    const tongueMesh = new THREE.Mesh(tGeo, tongueMat);
+    tonguePivot.add(tongueMesh);
 
     this.scene.add(root);
-    root.updateMatrixWorld(true);
+    this.buddyRoot = root;
+    this.parts = {
+      headGroup,
+      leftEarPivot,
+      rightEarPivot,
+      muzzle,
+      cheekLeft,
+      cheekRight,
+      blushLeft,
+      blushRight,
+      blushMat,
+      leftEye,
+      rightEye,
+      leftBrow,
+      rightBrow,
+      nose,
+      mouthAnchor,
+      mouthCavity,
+      upperTeeth,
+      lipRing,
+      closedLipBar,
+      tonguePivot,
+      tongueMesh,
+      earType: theme.earType,
+    };
 
-    // Compute exact framing around the real human head & mouth!
-    const focusBox = new THREE.Box3();
-    if (headMesh) {
-      focusBox.setFromObject(headMesh);
+    // Generous portrait headroom so full ears and chin fit cleanly above the bottom step pill!
+    if (theme.earType === 'bunny') {
+      this.camera.position.set(0, 0.24, 5.45);
+      this.camera.lookAt(0, 0.20, 0);
     } else {
-      focusBox.setFromObject(root);
+      this.camera.position.set(0, 0.10, 4.95);
+      this.camera.lookAt(0, 0.06, 0);
     }
-    const center = new THREE.Vector3();
-    const size = new THREE.Vector3();
-    focusBox.getCenter(center);
-    focusBox.getSize(size);
-
-    // Frame portrait cleanly with comfortable headroom above the hair and clear focus on lips/tongue
-    const headHeight = Math.max(0.22, Math.min(0.40, size.y));
-    const lookY = center.y + headHeight * 0.01;
-    const camDist = headHeight * 2.18;
-    this.cameraBasePos = new THREE.Vector3(center.x, lookY + headHeight * 0.015, center.z + camDist);
-    this.cameraLookTarget = new THREE.Vector3(center.x, lookY, center.z);
-
-    this.camera.position.copy(this.cameraBasePos);
-    this.camera.lookAt(this.cameraLookTarget);
-    if (this.mouthLight) {
-      this.mouthLight.position.set(center.x, lookY - 0.03, center.z + camDist * 0.55);
-    }
-
-    // Build an articulated 3D curved tongue mesh anchored inside the mouth so
-    // Tongue Out / Wiggle (Left <-> Right) / Up / Down are vividly, clearly visible!
-    this._attachArticulatedTongue(teethMesh || headMesh, center, size, Boolean(nativeTongueMesh));
   }
 
-  _attachArticulatedTongue(refMesh, headCenter, headSize, hasNativeTongue) {
-    if (this.customTongueGroup && this.customTongueGroup.parent) {
-      this.customTongueGroup.parent.remove(this.customTongueGroup);
-    }
-
-    // Find mouth world center from Teeth_Mesh bounding box if available (super exact!)
-    const mouthWorld = new THREE.Vector3(
-      headCenter.x,
-      headCenter.y - headSize.y * 0.20,
-      headCenter.z + headSize.z * 0.34
-    );
-    if (refMesh && (refMesh.name === 'Teeth_Mesh' || refMesh.name === 'Wolf3D_Teeth')) {
-      const tb = new THREE.Box3().setFromObject(refMesh);
-      const tc = new THREE.Vector3();
-      const ts = new THREE.Vector3();
-      tb.getCenter(tc);
-      tb.getSize(ts);
-      mouthWorld.set(tc.x, tc.y - ts.y * 0.08, tc.z + ts.z * 0.05);
-    }
-
-    this.mouthWorldBase = mouthWorld.clone();
-
-    // Sculpt a smooth organic wet-pink 3D tongue with rounded tip and subtle midline groove
-    const geo = new THREE.SphereGeometry(1, 24, 18);
-    const pos = geo.attributes.position;
-    for (let i = 0; i < pos.count; i++) {
-      let x = pos.getX(i);
-      let y = pos.getY(i);
-      let z = pos.getZ(i);
-      // Taper gently toward tip (+z), flatten slightly vertically, indent subtle center groove on top
-      const tipFactor = z > 0 ? 1 - z * 0.28 : 1;
-      x *= 0.0175 * tipFactor;
-      const groove = y > 0 ? Math.exp(-Math.pow(x / 0.0055, 2)) * 0.0022 : 0;
-      y = y * 0.0078 - groove;
-      z = (z + 0.65) * 0.028; // anchor near base (z=0), tip extends forward (+z)
-      pos.setXYZ(i, x, y, z);
-    }
-    geo.computeVertexNormals();
-
-    const mat = new THREE.MeshPhysicalMaterial({
-      color: 0xe86b82,
-      roughness: 0.26,
-      metalness: 0.0,
-      clearcoat: 0.65,
-      clearcoatRoughness: 0.22,
-      sheen: 0.35,
-      sheenColor: new THREE.Color(0xffb4c2),
-    });
-
-    const tongueMesh = new THREE.Mesh(geo, mat);
+  _buildPixarEye(lidMat) {
     const group = new THREE.Group();
-    group.add(tongueMesh);
-    group.visible = false;
 
-    if (this.headBone) {
-      this.headBone.add(group);
-      const localPos = this.headBone.worldToLocal(mouthWorld.clone());
-      group.position.copy(localPos);
-    } else {
-      this.scene.add(group);
-      group.position.copy(mouthWorld);
-    }
+    // Soft white sclera
+    const sclera = new THREE.Mesh(
+      new THREE.SphereGeometry(0.185, 26, 20),
+      new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 0.14, clearcoat: 0.7 })
+    );
+    sclera.scale.set(1.0, 1.08, 0.68);
+    group.add(sclera);
 
-    this.customTongueGroup = group;
-    this.customTongueMesh = tongueMesh;
-    this.hasNativeTongue = hasNativeTongue;
-  }
+    // Warm deep-amber/chocolate iris + dark pupil
+    const iris = new THREE.Mesh(
+      new THREE.SphereGeometry(0.13, 24, 18),
+      new THREE.MeshPhysicalMaterial({ color: 0x3f2314, roughness: 0.12, clearcoat: 0.9 })
+    );
+    iris.scale.set(1.0, 1.05, 0.45);
+    iris.position.set(0, 0, 0.085);
+    group.add(iris);
 
-  _setLoading(show, text = '') {
-    if (!this.loadingEl) return;
-    this.loadingEl.classList.toggle('hidden', !show);
-    if (text) {
-      const span = this.loadingEl.querySelector('span:last-child');
-      if (span) span.textContent = text;
-    }
+    const pupil = new THREE.Mesh(
+      new THREE.SphereGeometry(0.088, 20, 16),
+      new THREE.MeshBasicMaterial({ color: 0x110c0a })
+    );
+    pupil.scale.set(1.0, 1.05, 0.35);
+    pupil.position.set(0, 0, 0.125);
+    group.add(pupil);
+
+    // Dual Pixar sparkle catchlights!
+    const catchMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const bigSparkle = new THREE.Mesh(new THREE.SphereGeometry(0.038, 12, 12), catchMat);
+    bigSparkle.position.set(-0.048, 0.055, 0.155);
+    const smallSparkle = new THREE.Mesh(new THREE.SphereGeometry(0.018, 10, 10), catchMat);
+    smallSparkle.position.set(0.045, -0.042, 0.155);
+    group.add(bigSparkle, smallSparkle);
+
+    // Upper eyelid dome (closes softly on blink!)
+    const lid = new THREE.Mesh(
+      new THREE.SphereGeometry(0.195, 22, 14, 0, Math.PI * 2, 0, Math.PI * 0.55),
+      lidMat
+    );
+    lid.scale.set(1.04, 1.08, 0.74);
+    lid.rotation.x = -Math.PI * 0.58; // open by default
+    group.add(lid);
+
+    return { group, lid };
   }
 
   _syncSize() {
@@ -520,12 +621,10 @@ export class ThreeCoach {
     this.loopWaitMs = 0;
     this.activeStepIdx = -1;
 
-    // Retract tongue immediately when switching to a non-tongue move so it never lingers in slow-mo
     if (!item?.detector || !item.detector.startsWith('tongue')) {
-      this.currentValues.tongueOut = 0;
-      this.currentValues.tongueExtend = 0;
-      this.currentValues.tongueBendX = 0;
-      this.currentValues.tongueBendY = 0;
+      this.currentPose.tongueOut = 0;
+      this.currentPose.tongueX = 0;
+      this.currentPose.tongueY = 0;
     }
 
     if (this.currentVideoUrl) {
@@ -552,7 +651,7 @@ export class ThreeCoach {
       this.videoEl.classList.add('hidden');
       if (this.webglCanvas) this.webglCanvas.classList.remove('hidden');
       this.guideCanvas.classList.remove('hidden');
-      this.modeBadgeEl.textContent = isMoveMode ? '3D Real Coach' : '3D Speech Coach';
+      this.modeBadgeEl.textContent = BUDDY_THEMES[this.buddyKey]?.label || '3D Buddy';
       this.modeBadgeEl.classList.remove('parent-video');
     }
 
@@ -624,7 +723,7 @@ export class ThreeCoach {
 
     if (!this.hasParentVideo) {
       this._updateAnimation(dt);
-      this._applyPoseTo3D();
+      this._applyPoseToBuddy();
       if (this.renderer && this.scene && this.camera) {
         this.renderer.render(this.scene, this.camera);
       }
@@ -635,13 +734,12 @@ export class ThreeCoach {
   }
 
   _updateAnimation(dt) {
-    // Natural eye blinking
     this.blinkTimer -= dt;
     if (this.blinkTimer <= 0) {
-      this.blinkPhase += dt / 160;
+      this.blinkPhase += dt / 150;
       if (this.blinkPhase >= 1) {
         this.blinkPhase = 0;
-        this.blinkTimer = 2600 + Math.random() * 2600;
+        this.blinkTimer = 2500 + Math.random() * 2500;
       }
     }
 
@@ -660,12 +758,12 @@ export class ThreeCoach {
         }
       }
       if (found) {
-        this.targetValues = ARKIT_POSES[found.v] || ARKIT_POSES.rest;
+        this.targetPose = BUDDY_POSES[found.v] || BUDDY_POSES.rest;
         const idx = found.step !== undefined ? found.step : (found.syl ?? -1);
         this._highlightStep(idx);
       } else {
         this.playing = false;
-        this.targetValues = ARKIT_POSES.rest;
+        this.targetPose = BUDDY_POSES.rest;
         this._highlightStep(-1);
         this.loopWaitMs = this.isMoveMode ? 850 : 1250;
       }
@@ -677,87 +775,147 @@ export class ThreeCoach {
       }
     }
 
-    // Smooth organic interpolation of all blendshapes + 3D tongue bend
-    const alpha = Math.min(1, (dt / 1000) * (this.slowMode ? 6.0 : 11.0));
-    for (const k of ALL_MORPH_KEYS) {
-      const goal = this.targetValues[k] || 0;
-      this.currentValues[k] += (goal - this.currentValues[k]) * alpha;
-    }
-    for (const tk of ['tongueBendX', 'tongueBendY', 'tongueExtend']) {
-      const goal = this.targetValues[tk] || 0;
-      this.currentValues[tk] += (goal - this.currentValues[tk]) * alpha;
+    const alpha = Math.min(1, (dt / 1000) * (this.slowMode ? 6.5 : 12.0));
+    for (const k of Object.keys(this.currentPose)) {
+      this.currentPose[k] += ((this.targetPose[k] || 0) - this.currentPose[k]) * alpha;
     }
 
     this.pointerYaw += (this.targetYaw - this.pointerYaw) * Math.min(1, (dt / 1000) * 8);
     this.pointerPitch += (this.targetPitch - this.pointerPitch) * Math.min(1, (dt / 1000) * 8);
   }
 
-  _applyPoseTo3D() {
-    if (!this.modelReady) return;
+  _applyPoseToBuddy() {
+    const pt = this.parts;
+    if (!pt.headGroup) return;
+    const p = this.currentPose;
 
-    const blinkVal = this.blinkPhase > 0 ? Math.sin(this.blinkPhase * Math.PI) : 0;
+    // Gentle alive breathing + playful head lean
+    const breath = Math.sin(this.clockSec * 1.9) * 0.022;
+    pt.headGroup.position.y = 0.16 + breath;
+    pt.headGroup.rotation.y = Math.sin(this.clockSec * 0.9) * 0.055 + p.tongueX * 0.10 + this.pointerYaw;
+    pt.headGroup.rotation.x = Math.sin(this.clockSec * 1.3) * 0.025 + p.pucker * 0.06 - p.open * 0.04 + this.pointerPitch;
+    pt.headGroup.rotation.z = Math.sin(this.clockSec * 0.7) * 0.03 + p.tongueX * 0.07;
 
-    // Apply all ARKit + Oculus blendshapes across Head, Teeth, Eyelashes, Eyes, Tongue
-    for (const mesh of this.morphMeshes) {
-      const dict = mesh.morphTargetDictionary;
-      const inf = mesh.morphTargetInfluences;
-
-      for (const k of ALL_MORPH_KEYS) {
-        const idx = dict[k];
-        if (idx !== undefined) {
-          inf[idx] = this.currentValues[k];
-        }
-      }
-      if (dict.eyeBlinkLeft !== undefined) inf[dict.eyeBlinkLeft] = blinkVal;
-      if (dict.eyeBlinkRight !== undefined) inf[dict.eyeBlinkRight] = blinkVal;
+    // Happy ear wiggle / perk!
+    const earBounce = Math.sin(this.clockSec * 2.4) * 0.035 + p.earPerk * 0.14;
+    if (pt.earType === 'puppy') {
+      pt.leftEarPivot.rotation.z = -earBounce * 1.3;
+      pt.rightEarPivot.rotation.z = earBounce * 1.3;
+    } else {
+      pt.leftEarPivot.rotation.z = earBounce;
+      pt.rightEarPivot.rotation.z = -earBounce;
     }
 
-    // Subtle alive head micro-motion (gentle breathing nod & warm engagement tilt)
-    if (this.headBone) {
-      const idleYaw = Math.sin(this.clockSec * 0.9) * 0.035;
-      const idlePitch = Math.sin(this.clockSec * 1.4) * 0.02 - (this.currentValues.jawOpen || 0) * 0.03;
-      const idleRoll = Math.sin(this.clockSec * 0.65) * 0.022 + (this.currentValues.tongueBendX || 0) * 0.03;
-      this.headBone.rotation.y = idleYaw + this.pointerYaw;
-      this.headBone.rotation.x = idlePitch + this.pointerPitch;
-      this.headBone.rotation.z = idleRoll;
-    } else if (this.avatarRoot) {
-      this.avatarRoot.rotation.y = Math.sin(this.clockSec * 0.9) * 0.04 + this.pointerYaw;
+    // Blinking eyes + happy eye crinkle on big smile
+    const blink = this.blinkPhase > 0 ? Math.sin(this.blinkPhase * Math.PI) : 0;
+    const lidRot = -Math.PI * 0.58 + blink * Math.PI * 0.62;
+    pt.leftEye.lid.rotation.x = lidRot;
+    pt.rightEye.lid.rotation.x = lidRot;
+
+    const eyeSmileScale = 1 - p.smile * 0.10;
+    pt.leftEye.group.scale.set(1, eyeSmileScale, 1);
+    pt.rightEye.group.scale.set(1, eyeSmileScale, 1);
+
+    // Eyebrow lift
+    const browY = 0.48 + p.browLift * 0.085;
+    pt.leftBrow.position.y = browY;
+    pt.rightBrow.position.y = browY;
+
+    // Nose cute slight wiggle
+    pt.nose.position.y = -0.02 + p.pucker * 0.025 + p.smile * 0.02;
+
+    // Inflatable 3D Cheek Puffs!
+    const puff = p.cheekPuff;
+    const cheekS = 0.85 + puff * 0.56;
+    pt.cheekLeft.scale.set(cheekS, 0.76 + puff * 0.46, 0.62 + puff * 0.52);
+    pt.cheekRight.scale.set(cheekS, 0.76 + puff * 0.46, 0.62 + puff * 0.52);
+    pt.cheekLeft.position.set(-0.62 - puff * 0.16, -0.18, 0.52 + puff * 0.16);
+    pt.cheekRight.position.set(0.62 + puff * 0.16, -0.18, 0.52 + puff * 0.16);
+
+    pt.blushMat.opacity = 0.30 + puff * 0.38 + p.smile * 0.18;
+    pt.blushLeft.position.set(-0.64 - puff * 0.18, -0.09, 0.70 + puff * 0.16);
+    pt.blushRight.position.set(0.64 + puff * 0.18, -0.09, 0.70 + puff * 0.16);
+
+    // =========================================================================
+    // Seamless Continuous 3D Lips, Teeth & Mouth Cavity Animation
+    // =========================================================================
+    const open = p.open;
+    const wScale = p.width;
+    const pucker = p.pucker;
+    const smile = p.smile;
+    const isClosedTight = open < 0.06 && pucker < 0.4;
+
+    // Pucker pushes lips visibly forward (+Z)
+    pt.mouthAnchor.position.z = 0.89 + pucker * 0.14;
+    pt.mouthAnchor.position.y = -0.34 - open * 0.035 + smile * 0.03;
+
+    if (isClosedTight) {
+      pt.lipRing.visible = false;
+      pt.closedLipBar.visible = true;
+      pt.closedLipBar.scale.set(1.0 + p.press * 0.15, wScale * (0.95 - p.cheekPuff * 0.14), 1.0 + pucker * 0.5);
+    } else {
+      pt.closedLipBar.visible = false;
+      pt.lipRing.visible = true;
+      const ringW = pucker > 0.45 ? 0.56 + (1 - pucker) * 0.22 : wScale;
+      const ringH = pucker > 0.45
+        ? 0.56 + open * 0.35
+        : Math.max(0.18, 0.18 + open * 0.88 + smile * 0.12);
+      const ringZ = 1.0 + pucker * 0.85;
+      pt.lipRing.scale.set(ringW, ringH, ringZ);
+      pt.lipRing.position.z = 0.035 + pucker * 0.05;
     }
 
-    // Drive articulated 3D tongue mesh (curves vividly left/right/up/down!)
-    if (this.customTongueGroup && this.customTongueMesh) {
-      const ext = this.currentValues.tongueExtend || 0;
-      const bx = this.currentValues.tongueBendX || 0;
-      const by = this.currentValues.tongueBendY || 0;
-
-      if (ext > 0.08) {
-        this.customTongueGroup.visible = true;
-        // Extend forward out of the mouth and steer toward target direction
-        this.customTongueMesh.scale.set(
-          0.95 + ext * 0.22,
-          0.85 + ext * 0.18,
-          0.45 + ext * 1.15
-        );
-        this.customTongueMesh.position.set(
-          bx * 0.014 * ext,
-          -0.004 - by * 0.011 * ext,
-          0.008 + ext * 0.022
-        );
-        this.customTongueMesh.rotation.set(
-          0.18 + by * 0.48,  // tilt down (+y) or curl up (-y)
-          bx * 0.55,         // sweep left / right!
-          -bx * 0.15
-        );
-      } else {
-        this.customTongueGroup.visible = false;
-      }
+    // Mouth dark interior cavity (completely hidden when lips are closed!)
+    if (!isClosedTight && open > 0.08) {
+      pt.mouthCavity.visible = true;
+      const cavW = pucker > 0.45 ? 0.48 : wScale * 0.86;
+      pt.mouthCavity.scale.set(cavW, Math.max(0.14, open * 0.78), 0.42);
+      pt.mouthCavity.position.y = 0;
+    } else {
+      pt.mouthCavity.visible = false;
     }
 
-    // Project 3D mouth center to normalized 2D screen coordinates for crisp guide arrows!
-    if (this.mouthWorldBase && this.camera) {
-      const proj = this.mouthWorldBase.clone().project(this.camera);
-      this.mouthScreenPos.x = (proj.x + 1) * 0.5;
-      this.mouthScreenPos.y = (1 - proj.y) * 0.5;
+    // Upper teeth (cleanly hidden when lips pressed shut!)
+    pt.upperTeeth.visible = !isClosedTight && (open > 0.18 || smile > 0.55 || p.teethLip > 0.35);
+    pt.upperTeeth.scale.set(Math.min(1.18, wScale * 0.88), 0.85 + open * 0.16, 1);
+    pt.upperTeeth.position.set(0, 0.04 + open * 0.075, 0.025 + p.teethLip * 0.05);
+
+    // =========================================================================
+    // Articulated Glossy 3D Pink Tongue!
+    // =========================================================================
+    const tOut = p.tongueOut;
+    if (tOut > 0.05 || p.tongueIn > 0.15) {
+      pt.tonguePivot.visible = true;
+      const ext = Math.max(tOut, p.tongueIn * 0.35);
+      pt.tonguePivot.position.set(
+        p.tongueX * 0.14 * ext,
+        -0.05 - p.tongueY * 0.08 * ext + p.tongueIn * 0.08,
+        0.02 + ext * 0.18
+      );
+      pt.tonguePivot.rotation.set(
+        0.16 + p.tongueY * 0.55 - p.tongueIn * 0.45,
+        p.tongueX * 0.58,
+        -p.tongueX * 0.18
+      );
+      pt.tongueMesh.scale.set(
+        0.92 + ext * 0.18,
+        0.88 + ext * 0.18,
+        0.55 + ext * 0.88
+      );
+    } else {
+      pt.tonguePivot.visible = false;
+    }
+
+    // Project mouth center to 2D screen space for pulsing directional guide arrows
+    const mouthWorld = new THREE.Vector3();
+    pt.mouthAnchor.getWorldPosition(mouthWorld);
+    const proj = mouthWorld.project(this.camera);
+    this.mouthScreenPos.x = (proj.x + 1) * 0.5;
+    this.mouthScreenPos.y = (1 - proj.y) * 0.5;
+
+    // Gentle sparkle drift
+    if (this.sparkles) {
+      this.sparkles.position.y = Math.sin(this.clockSec * 1.1) * 0.06;
     }
   }
 
@@ -769,9 +927,9 @@ export class ThreeCoach {
 
     ctx.clearRect(0, 0, w, h);
 
-    if (this.showLines && this.isMoveMode && this.item?.guide && this.modelReady) {
+    if (this.showLines && this.isMoveMode && this.item?.guide) {
       const mx = w * this.mouthScreenPos.x;
-      const my = h * Math.min(0.78, Math.max(0.45, this.mouthScreenPos.y + 0.055));
+      const my = h * Math.min(0.76, Math.max(0.45, this.mouthScreenPos.y));
       const pulse = Math.sin(this.clockSec * 5) * 4 * dpr;
       const guide = this.item.guide;
 
@@ -780,40 +938,39 @@ export class ThreeCoach {
       ctx.lineJoin = 'round';
 
       if (guide === 'openWide' || guide === 'lipPop') {
-        this._drawArrow(ctx, mx, my - 22 * dpr - pulse, mx, my - 46 * dpr - pulse, '#10b981', dpr);
-        this._drawArrow(ctx, mx, my + 22 * dpr + pulse, mx, my + 46 * dpr + pulse, '#10b981', dpr);
+        this._drawArrow(ctx, mx, my - 24 * dpr - pulse, mx, my - 48 * dpr - pulse, '#10b981', dpr);
+        this._drawArrow(ctx, mx, my + 24 * dpr + pulse, mx, my + 48 * dpr + pulse, '#10b981', dpr);
       } else if (guide === 'smile') {
-        this._drawArrow(ctx, mx - 38 * dpr - pulse, my, mx - 64 * dpr - pulse, my, '#f59e0b', dpr);
-        this._drawArrow(ctx, mx + 38 * dpr + pulse, my, mx + 64 * dpr + pulse, my, '#f59e0b', dpr);
+        this._drawArrow(ctx, mx - 42 * dpr - pulse, my, mx - 68 * dpr - pulse, my, '#f59e0b', dpr);
+        this._drawArrow(ctx, mx + 42 * dpr + pulse, my, mx + 68 * dpr + pulse, my, '#f59e0b', dpr);
       } else if (guide === 'kiss') {
-        this._drawArrow(ctx, mx - 62 * dpr + pulse, my, mx - 36 * dpr + pulse, my, '#ec4899', dpr);
-        this._drawArrow(ctx, mx + 62 * dpr - pulse, my, mx + 36 * dpr - pulse, my, '#ec4899', dpr);
+        this._drawArrow(ctx, mx - 66 * dpr + pulse, my, mx - 38 * dpr + pulse, my, '#ec4899', dpr);
+        this._drawArrow(ctx, mx + 66 * dpr - pulse, my, mx + 38 * dpr - pulse, my, '#ec4899', dpr);
         ctx.strokeStyle = 'rgba(236, 72, 153, 0.72)';
         ctx.lineWidth = 3 * dpr;
         ctx.beginPath();
         ctx.arc(mx, my, 24 * dpr + pulse * 0.4, 0, Math.PI * 2);
         ctx.stroke();
       } else if (guide === 'tongueOut' || guide === 'tongueDown') {
-        this._drawArrow(ctx, mx, my + 24 * dpr + pulse, mx, my + 52 * dpr + pulse, '#ec4899', dpr);
+        this._drawArrow(ctx, mx, my + 16 * dpr + pulse * 0.6, mx, my + 40 * dpr + pulse * 0.6, '#ec4899', dpr);
       } else if (guide === 'tongueUp') {
-        this._drawArrow(ctx, mx, my - 12 * dpr - pulse, mx, my - 42 * dpr - pulse, '#ec4899', dpr);
+        this._drawArrow(ctx, mx, my - 12 * dpr - pulse, mx, my - 40 * dpr - pulse, '#ec4899', dpr);
       } else if (guide === 'tongueWiggle') {
-        this._drawArrow(ctx, mx - 24 * dpr - pulse, my + 18 * dpr, mx - 58 * dpr - pulse, my + 18 * dpr, '#ec4899', dpr);
-        this._drawArrow(ctx, mx + 24 * dpr + pulse, my + 18 * dpr, mx + 58 * dpr + pulse, my + 18 * dpr, '#ec4899', dpr);
+        this._drawArrow(ctx, mx - 28 * dpr - pulse, my + 20 * dpr, mx - 62 * dpr - pulse, my + 20 * dpr, '#ec4899', dpr);
+        this._drawArrow(ctx, mx + 28 * dpr + pulse, my + 20 * dpr, mx + 62 * dpr + pulse, my + 20 * dpr, '#ec4899', dpr);
       } else if (guide === 'cheekPuff') {
         ctx.strokeStyle = '#ec4899';
         ctx.lineWidth = 3.5 * dpr;
         ctx.beginPath();
-        ctx.arc(mx - 62 * dpr - pulse * 0.6, my - 16 * dpr, 22 * dpr, Math.PI * 0.68, Math.PI * 1.32);
+        ctx.arc(mx - 76 * dpr - pulse * 0.6, my - 14 * dpr, 24 * dpr, Math.PI * 0.68, Math.PI * 1.32);
         ctx.stroke();
         ctx.beginPath();
-        ctx.arc(mx + 62 * dpr + pulse * 0.6, my - 16 * dpr, 22 * dpr, -Math.PI * 0.32, Math.PI * 0.32);
+        ctx.arc(mx + 76 * dpr + pulse * 0.6, my - 14 * dpr, 24 * dpr, -Math.PI * 0.32, Math.PI * 0.32);
         ctx.stroke();
       }
       ctx.restore();
     }
 
-    // Slow-motion badge
     if (this.slowMode) {
       ctx.fillStyle = 'rgba(37, 99, 235, 0.9)';
       ctx.beginPath();
@@ -830,7 +987,7 @@ export class ThreeCoach {
   _drawArrow(ctx, x1, y1, x2, y2, color, dpr) {
     const angle = Math.atan2(y2 - y1, x2 - x1);
     const head = 10 * dpr;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.94)';
     ctx.lineWidth = 6.5 * dpr;
     ctx.beginPath();
     ctx.moveTo(x1, y1);

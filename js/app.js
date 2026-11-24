@@ -15,9 +15,9 @@ import {
   getWordVideo,
   deleteWordVideo,
   listSavedVideoWordIds,
-} from './storage.js?v=6';
+} from './storage.js?v=8';
 import { SpeechEngine, NEURAL_VOICES } from './speech.js?v=6';
-import { ThreeCoach } from './coach-3d.js?v=7';
+import { ThreeCoach, BUDDY_THEMES } from './coach-3d.js?v=9';
 import { LipTracker } from './lip-tracker.js?v=6';
 import { CelebrationOverlay } from './celebration.js?v=6';
 
@@ -114,6 +114,7 @@ const dom = {
   parentVideoPlayer: document.getElementById('parentVideoPlayer'),
   syllableStrip: document.getElementById('syllableStrip'),
   coachModeBadge: document.getElementById('coachModeBadge'),
+  buddyPicker: document.getElementById('buddyPicker'),
   coachLinesToggle: document.getElementById('coachLinesToggle'),
   coachPlayBtn: document.getElementById('coachPlayBtn'),
   coachSlowBtn: document.getElementById('coachSlowBtn'),
@@ -372,7 +373,13 @@ function applySettingsToUI() {
   dom.sensitivityValueLabel.textContent = `${sensDesc} (${s.sensitivity}/10)`;
   dom.cooldownRange.value = String(s.cooldownSec);
   dom.cooldownValueLabel.textContent = `${Number(s.cooldownSec).toFixed(1)}s`;
-  dom.avatarModelSelect.value = s.avatarModel || 'realistic';
+  const buddyId = BUDDY_THEMES[s.avatarModel] ? s.avatarModel : 'bear';
+  dom.avatarModelSelect.value = buddyId;
+  if (dom.buddyPicker) {
+    dom.buddyPicker.querySelectorAll('.buddy-chip').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.buddy === buddyId);
+    });
+  }
   dom.lineStyleSelect.value = s.lineStyle;
   dom.calmModeSetting.checked = Boolean(s.calmMode);
   dom.childLockSetting.checked = Boolean(s.childLock);
@@ -983,6 +990,22 @@ function bindEvents() {
     }
   });
 
+  // Quick 3D Animal Buddy Picker (🐻 Bear / 🐶 Puppy / 🐰 Bunny)
+  if (dom.buddyPicker) {
+    dom.buddyPicker.addEventListener('click', (e) => {
+      const btn = e.target.closest('.buddy-chip');
+      if (!btn) return;
+      const buddy = btn.dataset.buddy;
+      state.settings.avatarModel = buddy;
+      saveSettings(state.settings);
+      coach.loadAvatar(buddy);
+      if (!coach.hasParentVideo) {
+        dom.coachModeBadge.textContent = BUDDY_THEMES[buddy]?.label || '3D Buddy';
+      }
+      applySettingsToUI();
+    });
+  }
+
   // Watch & Copy Coach controls
   dom.coachLinesToggle.addEventListener('change', (e) => {
     state.settings.coachLines = e.target.checked;
@@ -1083,6 +1106,10 @@ function bindEvents() {
     state.settings.avatarModel = e.target.value;
     saveSettings(state.settings);
     coach.loadAvatar(e.target.value);
+    if (!coach.hasParentVideo) {
+      dom.coachModeBadge.textContent = BUDDY_THEMES[e.target.value]?.label || '3D Buddy';
+    }
+    applySettingsToUI();
   });
 
   dom.lineStyleSelect.addEventListener('change', (e) => {
@@ -1300,7 +1327,7 @@ async function init() {
   speech.onVoicesChanged(populateVoices);
   bindEvents();
   applySettingsToUI();
-  if (state.settings.avatarModel && state.settings.avatarModel !== 'realistic') {
+  if (state.settings.avatarModel && state.settings.avatarModel !== 'bear') {
     coach.loadAvatar(state.settings.avatarModel);
   }
   renderCategoryTabs();

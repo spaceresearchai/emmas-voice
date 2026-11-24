@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=6">
+  <link rel="stylesheet" href="css/styles.css?v=8">
   <script type="importmap">
     {
       "imports": {
@@ -207,13 +207,20 @@
           <div class="card-header">
             <div class="card-title-group">
               <h2>Watch &amp; Copy</h2>
-              <span class="mode-badge" id="coachModeBadge">Lips &amp; Tongue Coach</span>
+              <span class="mode-badge" id="coachModeBadge">🐻 Teddy Bear</span>
             </div>
-            <label class="mini-switch" title="Show guide lines and arrows on the animation">
-              <input type="checkbox" id="coachLinesToggle" checked>
-              <span class="mini-slider"></span>
-              <span class="mini-switch-label">Guides</span>
-            </label>
+            <div class="coach-header-right">
+              <div class="buddy-picker" id="buddyPicker" role="group" aria-label="Choose 3D animal buddy">
+                <button class="buddy-chip active" data-buddy="bear" type="button" title="Teddy Bear">🐻</button>
+                <button class="buddy-chip" data-buddy="puppy" type="button" title="Sunny Puppy">🐶</button>
+                <button class="buddy-chip" data-buddy="bunny" type="button" title="Cozy Bunny">🐰</button>
+              </div>
+              <label class="mini-switch" title="Show directional guide arrows on buddy">
+                <input type="checkbox" id="coachLinesToggle" checked>
+                <span class="mini-slider"></span>
+                <span class="mini-switch-label">Guides</span>
+              </label>
+            </div>
           </div>
 
           <div class="coach-stage" id="coachStage">
@@ -314,10 +321,11 @@
           </div>
 
           <div class="setting-group">
-            <label class="setting-label" for="avatarModelSelect">3D Coach Person</label>
+            <label class="setting-label" for="avatarModelSelect">3D Animal Buddy</label>
             <select id="avatarModelSelect" class="input-control">
-              <option value="realistic">Realistic 3D Person (Photorealistic Avaturn)</option>
-              <option value="friendly">Friendly 3D Coach (Stylized Brunette)</option>
+              <option value="bear">🐻 Teddy Bear (Warm &amp; Cozy)</option>
+              <option value="puppy">🐶 Sunny Puppy (Playful Floppy Ears)</option>
+              <option value="bunny">🐰 Cozy Bunny (Tall Velvety Ears)</option>
             </select>
           </div>
 
@@ -564,6 +572,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=7"></script>
+  <script type="module" src="js/app.js?v=9"></script>
 </body>
 </html>

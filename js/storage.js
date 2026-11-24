@@ -12,7 +12,7 @@ const STORE_VIDEOS = 'wordVideos';
 
 export const DEFAULT_SETTINGS = {
   practiceMode: 'moves',      // 'moves' (default) | 'words'
-  avatarModel: 'realistic',   // 'realistic' (Avaturn) | 'friendly' (Brunette)
+  avatarModel: 'bear',        // 'bear' | 'puppy' | 'bunny'
   childName: 'Emma',
   detectionMode: 'encourage', // 'encourage' | 'match'
   sensitivity: 6,             // 1..10 (higher = easier to trigger)
@@ -47,6 +47,10 @@ export function loadSettings() {
         parsed.speechRate = 1.04;
       }
       parsed.voiceMigratedV5 = true;
+      saveSettings(parsed);
+    }
+    if (!['bear', 'puppy', 'bunny'].includes(parsed.avatarModel)) {
+      parsed.avatarModel = 'bear';
       saveSettings(parsed);
     }
     return parsed;
