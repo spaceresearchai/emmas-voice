@@ -14,7 +14,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=5">
+  <link rel="stylesheet" href="css/styles.css?v=6">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      }
+    }
+  </script>
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -209,12 +217,16 @@
           </div>
 
           <div class="coach-stage" id="coachStage">
-            <canvas id="coachCanvas" width="560" height="400" aria-label="Enlarged animated lips and tongue coach"></canvas>
+            <canvas id="coachGuideCanvas" class="coach-guide-canvas" aria-label="Directional guide arrows over 3D coach"></canvas>
             <video id="parentVideoPlayer" class="hidden" playsinline muted loop></video>
+            <div class="coach-loading-pill hidden" id="coachLoadingPill">
+              <span class="spinner"></span>
+              <span>Loading 3D coach…</span>
+            </div>
             <div class="syllable-strip" id="syllableStrip"></div>
           </div>
 
-          <div class="coach-controls">
+          <div class="coach-controls" id="coachControls">
             <button class="coach-btn coach-btn-primary" id="coachPlayBtn" type="button">
               <span>▶</span> <span>Show</span>
             </button>
@@ -226,6 +238,9 @@
             </button>
             <button class="coach-btn" id="quickRecordVideoBtn" type="button" title="Record a real parent video for this move or word">
               <span>🎥</span> <span>Record</span>
+            </button>
+            <button class="coach-btn coach-btn-danger hidden" id="quickRemoveVideoBtn" type="button" title="Remove saved parent video and return to 3D coach">
+              <span>🗑️</span> <span>Remove Video</span>
             </button>
           </div>
         </section>
@@ -296,6 +311,14 @@
               <span class="setting-value" id="cooldownValueLabel">2.6s</span>
             </div>
             <input type="range" id="cooldownRange" min="1.2" max="5.0" step="0.1" value="2.6" class="range-control">
+          </div>
+
+          <div class="setting-group">
+            <label class="setting-label" for="avatarModelSelect">3D Coach Person</label>
+            <select id="avatarModelSelect" class="input-control">
+              <option value="realistic">Realistic 3D Person (Photorealistic Avaturn)</option>
+              <option value="friendly">Friendly 3D Coach (Stylized Brunette)</option>
+            </select>
           </div>
 
           <div class="setting-group">
@@ -490,6 +513,7 @@
             📁 Upload Video
             <input type="file" id="uploadVideoInput" accept="video/*" hidden>
           </label>
+          <button class="danger-outline-btn hidden" id="removeExistingRecBtn" type="button" style="width:auto;padding:0 18px;height:54px;border-radius:18px">🗑️ Remove Saved Video</button>
         </div>
         <p class="camera-error hidden" id="recorderErrorMsg"></p>
       </div>
@@ -540,6 +564,6 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=5"></script>
+  <script type="module" src="js/app.js?v=7"></script>
 </body>
 </html>

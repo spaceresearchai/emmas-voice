@@ -12,6 +12,7 @@ const STORE_VIDEOS = 'wordVideos';
 
 export const DEFAULT_SETTINGS = {
   practiceMode: 'moves',      // 'moves' (default) | 'words'
+  avatarModel: 'realistic',   // 'realistic' (Avaturn) | 'friendly' (Brunette)
   childName: 'Emma',
   detectionMode: 'encourage', // 'encourage' | 'match'
   sensitivity: 6,             // 1..10 (higher = easier to trigger)

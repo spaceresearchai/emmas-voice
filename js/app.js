@@ -15,11 +15,11 @@ import {
   getWordVideo,
   deleteWordVideo,
   listSavedVideoWordIds,
-} from './storage.js?v=5';
-import { SpeechEngine, NEURAL_VOICES } from './speech.js?v=5';
-import { ArticulationCoach } from './coach.js?v=5';
-import { LipTracker } from './lip-tracker.js?v=5';
-import { CelebrationOverlay } from './celebration.js?v=5';
+} from './storage.js?v=6';
+import { SpeechEngine, NEURAL_VOICES } from './speech.js?v=6';
+import { ThreeCoach } from './coach-3d.js?v=7';
+import { LipTracker } from './lip-tracker.js?v=6';
+import { CelebrationOverlay } from './celebration.js?v=6';
 
 const LINE_STYLES = ['clean', 'detailed', 'minimal'];
 const LINE_STYLE_NAMES = {
@@ -108,7 +108,9 @@ const dom = {
   lipThresholdMarker: document.getElementById('lipThresholdMarker'),
   lipShapeHint: document.getElementById('lipShapeHint'),
 
-  coachCanvas: document.getElementById('coachCanvas'),
+  coachStage: document.getElementById('coachStage'),
+  coachGuideCanvas: document.getElementById('coachGuideCanvas'),
+  coachLoadingPill: document.getElementById('coachLoadingPill'),
   parentVideoPlayer: document.getElementById('parentVideoPlayer'),
   syllableStrip: document.getElementById('syllableStrip'),
   coachModeBadge: document.getElementById('coachModeBadge'),
@@ -117,6 +119,7 @@ const dom = {
   coachSlowBtn: document.getElementById('coachSlowBtn'),
   coachLoopBtn: document.getElementById('coachLoopBtn'),
   quickRecordVideoBtn: document.getElementById('quickRecordVideoBtn'),
+  quickRemoveVideoBtn: document.getElementById('quickRemoveVideoBtn'),
 
   listCardTitle: document.getElementById('listCardTitle'),
   nextItemBtn: document.getElementById('nextItemBtn'),
@@ -132,6 +135,7 @@ const dom = {
   sensitivityValueLabel: document.getElementById('sensitivityValueLabel'),
   cooldownRange: document.getElementById('cooldownRange'),
   cooldownValueLabel: document.getElementById('cooldownValueLabel'),
+  avatarModelSelect: document.getElementById('avatarModelSelect'),
   lineStyleSelect: document.getElementById('lineStyleSelect'),
   calmModeSetting: document.getElementById('calmModeSetting'),
   childLockSetting: document.getElementById('childLockSetting'),
@@ -177,17 +181,20 @@ const dom = {
   saveRecBtn: document.getElementById('saveRecBtn'),
   retakeRecBtn: document.getElementById('retakeRecBtn'),
   uploadVideoInput: document.getElementById('uploadVideoInput'),
+  removeExistingRecBtn: document.getElementById('removeExistingRecBtn'),
   recorderErrorMsg: document.getElementById('recorderErrorMsg'),
 };
 
 // Core Engines
 const speech = new SpeechEngine();
 const celebration = new CelebrationOverlay(dom.celebrationCanvas);
-const coach = new ArticulationCoach({
-  canvas: dom.coachCanvas,
+const coach = new ThreeCoach({
+  stageEl: dom.coachStage,
+  guideCanvas: dom.coachGuideCanvas,
   videoEl: dom.parentVideoPlayer,
   syllableStripEl: dom.syllableStrip,
   modeBadgeEl: dom.coachModeBadge,
+  loadingEl: dom.coachLoadingPill,
 });
 
 const tracker = new LipTracker({
@@ -365,6 +372,7 @@ function applySettingsToUI() {
   dom.sensitivityValueLabel.textContent = `${sensDesc} (${s.sensitivity}/10)`;
   dom.cooldownRange.value = String(s.cooldownSec);
   dom.cooldownValueLabel.textContent = `${Number(s.cooldownSec).toFixed(1)}s`;
+  dom.avatarModelSelect.value = s.avatarModel || 'realistic';
   dom.lineStyleSelect.value = s.lineStyle;
   dom.calmModeSetting.checked = Boolean(s.calmMode);
   dom.childLockSetting.checked = Boolean(s.childLock);
@@ -446,7 +454,9 @@ async function selectItem(itemId, { speakModel = true } = {}) {
   renderItemGrid();
   updateProgressUI();
 
-  const videoBlob = state.savedVideoIds.has(item.id) ? await getWordVideo(item.id) : null;
+  const hasSavedVideo = state.savedVideoIds.has(item.id);
+  const videoBlob = hasSavedVideo ? await getWordVideo(item.id) : null;
+  dom.quickRemoveVideoBtn.classList.toggle('hidden', !videoBlob);
   coach.setItem(item, { isMoveMode: isMovesMode(), parentVideoBlob: videoBlob });
 
   if (speakModel) {
@@ -732,6 +742,7 @@ async function openRecorderModal(itemId) {
 
   dom.recorderModalTitle.textContent = `Record Video for "${item.text}"`;
   dom.recorderErrorMsg.classList.add('hidden');
+  dom.removeExistingRecBtn.classList.toggle('hidden', !state.savedVideoIds.has(item.id));
   dom.startRecBtn.classList.remove('hidden');
   dom.stopRecBtn.classList.add('hidden');
   dom.saveRecBtn.classList.add('hidden');
@@ -1004,6 +1015,17 @@ function bindEvents() {
     openRecorderModal(getActiveItem().id);
   });
 
+  dom.quickRemoveVideoBtn.addEventListener('click', async () => {
+    const active = getActiveItem();
+    if (!state.savedVideoIds.has(active.id)) return;
+    await deleteWordVideo(active.id);
+    state.savedVideoIds.delete(active.id);
+    renderItemGrid();
+    renderManageWordsList();
+    updateProgressUI();
+    await selectItem(active.id, { speakModel: false });
+  });
+
   dom.nextItemBtn.addEventListener('click', () => {
     speech.unlockAudio();
     selectNextItem();
@@ -1055,6 +1077,12 @@ function bindEvents() {
     state.settings.cooldownSec = Number(e.target.value);
     saveSettings(state.settings);
     applySettingsToUI();
+  });
+
+  dom.avatarModelSelect.addEventListener('change', (e) => {
+    state.settings.avatarModel = e.target.value;
+    saveSettings(state.settings);
+    coach.loadAvatar(e.target.value);
   });
 
   dom.lineStyleSelect.addEventListener('change', (e) => {
@@ -1213,6 +1241,20 @@ function bindEvents() {
     }
   });
 
+  dom.removeExistingRecBtn.addEventListener('click', async () => {
+    if (!state.recItemId) return;
+    await deleteWordVideo(state.recItemId);
+    state.savedVideoIds.delete(state.recItemId);
+    renderItemGrid();
+    renderManageWordsList();
+    updateProgressUI();
+    const targetId = state.recItemId;
+    await closeRecorderModal();
+    if (getActiveItem().id === targetId) {
+      selectItem(targetId, { speakModel: false });
+    }
+  });
+
   dom.uploadVideoInput.addEventListener('change', (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1258,6 +1300,9 @@ async function init() {
   speech.onVoicesChanged(populateVoices);
   bindEvents();
   applySettingsToUI();
+  if (state.settings.avatarModel && state.settings.avatarModel !== 'realistic') {
+    coach.loadAvatar(state.settings.avatarModel);
+  }
   renderCategoryTabs();
   await selectItem(getActiveItem().id, { speakModel: false });
 }
