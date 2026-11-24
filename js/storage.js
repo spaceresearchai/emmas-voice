@@ -21,21 +21,34 @@ export const DEFAULT_SETTINGS = {
   childLock: true,
   language: 'en-US',
   voiceEngine: 'neural',      // 'neural' (Piper VITS WASM) | 'browser'
-  neuralVoiceId: 'en_US-amy-medium',
+  neuralVoiceId: 'en_US-kristin-medium',
   voiceURI: '',
-  speechRate: 0.92,
+  speechRate: 1.04,
   chimeEnabled: true,
   praiseEnabled: false,
   coachLines: true,
   coachLoop: true,
   coachSlow: false,
+  voiceMigratedV5: true,
 };
 
 export function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    // Migrate earlier sleepy default voice (amy @ 0.85x) to cheerful bright default (kristin @ 1.04x)
+    if (!parsed.voiceMigratedV5) {
+      if (!parsed.neuralVoiceId || parsed.neuralVoiceId === 'en_US-amy-medium') {
+        parsed.neuralVoiceId = 'en_US-kristin-medium';
+      }
+      if (parsed.speechRate <= 0.92) {
+        parsed.speechRate = 1.04;
+      }
+      parsed.voiceMigratedV5 = true;
+      saveSettings(parsed);
+    }
+    return parsed;
   } catch {
     return { ...DEFAULT_SETTINGS };
   }

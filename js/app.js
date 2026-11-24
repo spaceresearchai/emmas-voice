@@ -15,11 +15,11 @@ import {
   getWordVideo,
   deleteWordVideo,
   listSavedVideoWordIds,
-} from './storage.js?v=4';
-import { SpeechEngine, NEURAL_VOICES } from './speech.js?v=4';
-import { ArticulationCoach } from './coach.js?v=3';
-import { LipTracker } from './lip-tracker.js?v=3';
-import { CelebrationOverlay } from './celebration.js?v=3';
+} from './storage.js?v=5';
+import { SpeechEngine, NEURAL_VOICES } from './speech.js?v=5';
+import { ArticulationCoach } from './coach.js?v=5';
+import { LipTracker } from './lip-tracker.js?v=5';
+import { CelebrationOverlay } from './celebration.js?v=5';
 
 const LINE_STYLES = ['clean', 'detailed', 'minimal'];
 const LINE_STYLE_NAMES = {
@@ -65,6 +65,9 @@ const dom = {
   modeWordsBtn: document.getElementById('modeWordsBtn'),
   totalStarsValue: document.getElementById('totalStarsValue'),
   calmModeQuickBtn: document.getElementById('calmModeQuickBtn'),
+  aboutResearchBtn: document.getElementById('aboutResearchBtn'),
+  aboutModalBackdrop: document.getElementById('aboutModalBackdrop'),
+  closeAboutModalBtn: document.getElementById('closeAboutModalBtn'),
   parentSettingsBtn: document.getElementById('parentSettingsBtn'),
   parentBtnLabel: document.getElementById('parentBtnLabel'),
 
@@ -377,7 +380,7 @@ function applySettingsToUI() {
   dom.chimeSetting.checked = Boolean(s.chimeEnabled);
   dom.praiseSetting.checked = Boolean(s.praiseEnabled);
 
-  const thr = Math.round((0.72 - s.sensitivity * 0.05) * 100);
+  const thr = Math.round((0.64 - s.sensitivity * 0.05) * 100);
   dom.lipThresholdMarker.style.left = `${Math.min(95, Math.max(10, thr))}%`;
 
   updateProgressUI();
@@ -954,6 +957,19 @@ function bindEvents() {
     state.settings.calmMode = !state.settings.calmMode;
     saveSettings(state.settings);
     applySettingsToUI();
+  });
+
+  // About & Research Modal
+  dom.aboutResearchBtn.addEventListener('click', () => {
+    dom.aboutModalBackdrop.classList.remove('hidden');
+  });
+  dom.closeAboutModalBtn.addEventListener('click', () => {
+    dom.aboutModalBackdrop.classList.add('hidden');
+  });
+  dom.aboutModalBackdrop.addEventListener('click', (e) => {
+    if (e.target === dom.aboutModalBackdrop) {
+      dom.aboutModalBackdrop.classList.add('hidden');
+    }
   });
 
   // Watch & Copy Coach controls

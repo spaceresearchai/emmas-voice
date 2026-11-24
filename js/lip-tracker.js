@@ -1,12 +1,18 @@
 // ============================================================================
-// Real-Time Camera Lip, Tongue & Cheek Tracker
-// Hybrid Pipeline: MediaPipe FaceLandmarker (478 landmarks + 52 blendshapes)
-//                + Mouth-ROI Pink-Tongue Chroma Centroid Tracker
+// Real-Time Camera Lip, Tongue & Cheek Tracker (Calibrated for Real Webcams)
+// Hybrid Pipeline:
+//   1. MediaPipe FaceLandmarker (478 3D landmarks + 52 ARKit blendshapes)
+//   2. Calibrated Inner-Mouth & Protrusion-Zone Pink-Tongue Chroma Tracker
+//   3. 3D/2D Cheek-Span & Forward-Bulge Puff Detector
 // ============================================================================
 
 const OUTER_LIP = [61, 185, 40, 39, 37, 0, 267, 269, 270, 409, 291, 375, 321, 405, 314, 17, 84, 181, 91, 146];
 const INNER_LIP = [78, 191, 80, 81, 82, 13, 312, 311, 310, 415, 308, 324, 318, 402, 317, 14, 87, 178, 88, 95];
 const JAW_LINE = [234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152, 377, 400, 378, 379, 365, 397, 288, 361, 323, 454];
+
+// Left & Right mid-cheek landmarks for puff expansion tracking
+const LEFT_CHEEK_IDX = [50, 187, 205, 207];
+const RIGHT_CHEEK_IDX = [280, 411, 425, 427];
 
 const MP_CDNS = [
   {
@@ -35,10 +41,10 @@ export class LipTracker {
     this.canvasEl = canvasEl;
     this.ctx = canvasEl.getContext('2d');
 
-    // Offscreen tiny canvas for real-time hybrid Mouth-ROI tongue chroma analysis
+    // Offscreen canvas for fast inner-mouth & chin tongue chroma tracking
     this.roiCanvas = document.createElement('canvas');
-    this.roiCanvas.width = 48;
-    this.roiCanvas.height = 36;
+    this.roiCanvas.width = 56;
+    this.roiCanvas.height = 48;
     this.roiCtx = this.roiCanvas.getContext('2d', { willReadFrequently: true });
 
     this.onStatusChange = onStatusChange || (() => {});
@@ -54,28 +60,31 @@ export class LipTracker {
     this.activeDelegate = 'GPU';
     this.consecutiveFrameErrors = 0;
     this.rafId = null;
-    this.lastDetectTs = 0; // Strictly monotonic ms across FaceLandmarker lifetime
+    this.lastDetectTs = 0;
     this.lastFrameDetectWall = 0;
 
-    // Configurable settings
     this.settings = {
-      practiceMode: 'moves',      // 'moves' | 'words'
-      targetMove: 'openWide',     // openWide | kiss | smile | lipPop | tongueOut | tongueWiggle | tongueUp | tongueDown | cheekPuff
-      detectionMode: 'encourage', // 'encourage' | 'match' (used in words mode)
+      practiceMode: 'moves',
+      targetMove: 'openWide',
+      detectionMode: 'encourage',
       sensitivity: 6,
       cooldownSec: 2.6,
       lineStyle: 'clean',
       targetShape: 'bilabial',
     };
 
-    // Adaptive baseline & movement state
+    // Adaptive resting baseline (lips + cheeks + tongue cavity)
     this.baseline = {
       ready: false,
       openness: 0.04,
       outerH: 0.22,
       width: 0.56,
+      cheekSpan: 1.05,
+      cheekBulgeZ: 0.0,
+      pinkRestRatio: 0.14,
       samples: 0,
     };
+
     this.prevMetrics = { openness: 0, width: 0, cx: 0.5, cy: 0.5 };
     this.smoothScore = 0;
     this.activeHoldMs = 0;
@@ -102,6 +111,7 @@ export class LipTracker {
     Object.assign(this.settings, partial);
     if (moveChanged) {
       this.activeHoldMs = 0;
+      this.smoothScore = 0;
       this.tongueWiggleMinX = 0;
       this.tongueWiggleMaxX = 0;
       this.sawClosedBeforeOpen = false;
@@ -157,7 +167,7 @@ export class LipTracker {
     this.lastFrameDetectWall = 0;
     this.onModelLoading(false);
     this.onStatusChange('tracking', 'Watching lips & tongue');
-    this.rafId = requestAnimationFrame((ts) => this._loop(ts));
+    this.rafId = requestAnimationFrame(() => this._loop());
   }
 
   startDemo() {
@@ -168,7 +178,7 @@ export class LipTracker {
     this.demoBurstUntil = performance.now() + 1900;
     this.demoAutoNext = performance.now() + 5400;
     this.onStatusChange('tracking', 'Demo camera active');
-    this.rafId = requestAnimationFrame((ts) => this._loop(ts));
+    this.rafId = requestAnimationFrame(() => this._loop());
   }
 
   stop() {
@@ -340,46 +350,48 @@ export class LipTracker {
     const blendshapes = this._extractBlendshapes(result.faceBlendshapes?.[0]?.categories);
     const mapper = this._createCoverMapper(cw, ch, this.videoEl.videoWidth, this.videoEl.videoHeight);
 
-    // Hybrid stage 2: estimate visible tongue position inside mouth ROI when mouth opens or tongueOut fires
     const tongueInfo = this._analyzeTongueROI(landmarks, blendshapes, mapper);
     this._evaluateAndDrawLandmarks(landmarks, mapper, now, dt, blendshapes, tongueInfo);
   }
 
   /**
-   * Hybrid Mouth-ROI Tongue Estimator:
-   * MediaPipe provides neural `tongueOut` (0..1) but not 3D tongue tip coordinates.
-   * Here we crop a tiny 48x36 mouth region from the raw video, find strong pink/coral
-   * tongue pixels inside/just below the lips, and return mirrored tip coordinates (x, y)
-   * plus normalized lateral (-1..+1) and vertical (-1..+1) direction!
+   * Calibrated Inner-Mouth & Protrusion-Zone Tongue Chroma Detector:
+   * Strictly inspects pixels INSIDE the inner lip opening (excluding outer lip skin)
+   * plus the protrusion zone directly below the lower lip.
+   * Compares bright warm pink tongue flesh vs dark oral cavity shadow & white teeth!
    */
   _analyzeTongueROI(landmarks, blendshapes, mapPt) {
     const bsTongue = blendshapes?.tongueOut || 0;
-    const pLeft = landmarks[61];
-    const pRight = landmarks[291];
-    const pTop = landmarks[0];
-    const pBot = landmarks[17];
-    if (!pLeft || !pRight || !pTop || !pBot) {
-      return { visible: false, strength: bsTongue, dirX: 0, dirY: 0, tipPt: null };
+    const bsJawOpen = blendshapes?.jawOpen || 0;
+    const pLeft = landmarks[78] || landmarks[61];
+    const pRight = landmarks[308] || landmarks[291];
+    const pTopInner = landmarks[13];
+    const pBotInner = landmarks[14];
+    const pBotOuter = landmarks[17] || pBotInner;
+    const pTopOuter = landmarks[0] || pTopInner;
+
+    if (!pLeft || !pRight || !pTopInner || !pBotInner) {
+      return { visible: bsTongue > 0.12, strength: bsTongue * 3.5, dirX: 0, dirY: 0, tipPt: null, upperPink: 0, lowerPink: 0 };
     }
 
     const vw = this.videoEl.videoWidth;
     const vh = this.videoEl.videoHeight;
 
-    // Bounding box in raw video pixels (expanded down slightly for chin/tongue-down)
+    // Sample box centered tightly on inner mouth opening + slight above/below protrusion area
     const minX = Math.min(pLeft.x, pRight.x);
     const maxX = Math.max(pLeft.x, pRight.x);
-    const minY = Math.min(pTop.y, pBot.y);
-    const maxY = Math.max(pTop.y, pBot.y);
-    const boxW = Math.max(0.04, maxX - minX);
-    const boxH = Math.max(0.03, maxY - minY);
+    const minY = Math.min(pTopOuter.y, pTopInner.y);
+    const maxY = Math.max(pBotOuter.y, pBotInner.y);
+    const boxW = Math.max(0.03, maxX - minX);
+    const boxH = Math.max(0.025, maxY - minY);
 
-    const sx = Math.max(0, (minX - boxW * 0.12) * vw);
-    const sy = Math.max(0, (minY - boxH * 0.15) * vh);
-    const sw = Math.min(vw - sx, boxW * 1.24 * vw);
+    const sx = Math.max(0, (minX - boxW * 0.08) * vw);
+    const sy = Math.max(0, (minY - boxH * 0.12) * vh);
+    const sw = Math.min(vw - sx, boxW * 1.16 * vw);
     const sh = Math.min(vh - sy, boxH * 1.55 * vh);
 
-    if (sw < 8 || sh < 8) {
-      return { visible: bsTongue > 0.2, strength: bsTongue, dirX: 0, dirY: 0, tipPt: null };
+    if (sw < 10 || sh < 10) {
+      return { visible: bsTongue > 0.12, strength: bsTongue * 3.5, dirX: 0, dirY: 0, tipPt: null, upperPink: 0, lowerPink: 0 };
     }
 
     const rw = this.roiCanvas.width;
@@ -390,64 +402,122 @@ export class LipTracker {
     try {
       data = this.roiCtx.getImageData(0, 0, rw, rh).data;
     } catch {
-      return { visible: bsTongue > 0.2, strength: bsTongue, dirX: 0, dirY: 0, tipPt: null };
+      return { visible: bsTongue > 0.12, strength: bsTongue * 3.5, dirX: 0, dirY: 0, tipPt: null, upperPink: 0, lowerPink: 0 };
     }
 
-    // Center mouth inner cavity mask estimate (focus on inner 72% horizontally, middle-to-lower vertically)
-    let sumX = 0;
-    let sumY = 0;
-    let sumW = 0;
-    let count = 0;
+    // Map inner lip opening Y coordinates into ROI pixel space
+    const innerTopY = Math.max(0, Math.min(rh - 1, Math.round(((pTopInner.y * vh - sy) / sh) * rh)));
+    const innerBotY = Math.max(innerTopY + 1, Math.min(rh - 1, Math.round(((pBotInner.y * vh - sy) / sh) * rh)));
+    const innerMidY = (innerTopY + innerBotY) * 0.5;
+    const innerOpenPx = innerBotY - innerTopY;
 
-    for (let y = Math.floor(rh * 0.22); y < Math.floor(rh * 0.92); y++) {
-      for (let x = Math.floor(rw * 0.14); x < Math.floor(rw * 0.86); x++) {
-        const idx = (y * rw + x) * 4;
-        const r = data[idx];
-        const g = data[idx + 1];
-        const b = data[idx + 2];
+    // Sample reference cheek/chin skin luminance & redness at bottom corners of ROI to adapt to lighting/skin tone!
+    let skinR = 0, skinG = 0, skinCnt = 0;
+    for (let y = rh - 4; y < rh; y++) {
+      for (const x of [2, 3, rw - 4, rw - 3]) {
+        const i = (y * rw + x) * 4;
+        skinR += data[i];
+        skinG += data[i + 1];
+        skinCnt++;
+      }
+    }
+    const avgSkinRG = skinCnt > 0 ? (skinR - skinG) / skinCnt : 22;
 
-        // Tongue chroma signature: warm reddish-pink, brighter than dark mouth cavity,
-        // distinctly redder than teeth (r - g > 24) and moderately saturated
-        const rg = r - g;
-        const rb = r - b;
-        if (r > 105 && r < 248 && rg > 24 && rb > 18 && g > 45 && g < 185) {
-          const weight = (rg - 20) * 0.03;
-          sumX += x * weight;
-          sumY += y * weight;
-          sumW += weight;
-          count++;
+    let sumX = 0, sumY = 0, sumW = 0;
+    let totalInside = 0, pinkInside = 0, darkInside = 0;
+    let upperPinkCount = 0, lowerPinkCount = 0;
+
+    // 1. Inspect strictly INSIDE the inner-mouth ellipse (no outer lip contamination!)
+    if (innerOpenPx >= 3) {
+      const rx = rw * 0.36;
+      const ry = Math.max(2, innerOpenPx * 0.52);
+      const rcx = rw * 0.5;
+      const rcy = innerMidY;
+
+      for (let y = Math.max(0, innerTopY); y <= Math.min(rh - 1, innerBotY + 5); y++) {
+        for (let x = Math.floor(rw * 0.14); x < Math.ceil(rw * 0.86); x++) {
+          const ex = (x - rcx) / rx;
+          const ey = (y - rcy) / (ry + 3);
+          if (ex * ex + ey * ey > 1.15) continue;
+
+          totalInside++;
+          const idx = (y * rw + x) * 4;
+          const r = data[idx];
+          const g = data[idx + 1];
+          const b = data[idx + 2];
+          const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+          const rg = r - g;
+          const rb = r - b;
+
+          // Dark oral cavity
+          if (luma < 56) {
+            darkInside++;
+            continue;
+          }
+          // Skip bright white teeth
+          const isTeeth = luma > 148 && rg < 16 && Math.abs(g - b) < 20;
+          if (isTeeth) continue;
+
+          // Tongue pinkness: warmer/redder than neutral gray, brighter than oral cavity shadow
+          const pinkThreshold = Math.max(15, Math.min(34, avgSkinRG + 5));
+          if (r > 88 && rg > pinkThreshold && rb > 12 && luma > 60 && luma < 215) {
+            const w = Math.max(0.2, (rg - pinkThreshold + 6) * 0.04);
+            pinkInside++;
+            sumX += x * w;
+            sumY += y * w;
+            sumW += w;
+            if (y < innerMidY) upperPinkCount++;
+            else lowerPinkCount++;
+          }
         }
       }
     }
 
-    const areaRatio = count / (rw * rh * 0.5);
-    const combinedStrength = Math.max(bsTongue, bsTongue > 0.1 ? Math.min(1, bsTongue + areaRatio * 0.45) : areaRatio * 0.65);
+    const pinkFillRatio = totalInside > 6 ? pinkInside / totalInside : 0;
+    const upperPink = totalInside > 6 ? upperPinkCount / (totalInside * 0.5) : 0;
+    const lowerPink = totalInside > 6 ? lowerPinkCount / (totalInside * 0.5) : 0;
 
-    if (sumW <= 0.1 || (bsTongue < 0.12 && areaRatio < 0.18)) {
-      return { visible: bsTongue > 0.22, strength: bsTongue, dirX: 0, dirY: 0, tipPt: null };
+    // Combine MediaPipe neural tongueOut (amplified!) + inner-mouth pink chroma fill when mouth is open!
+    const mouthOpenEnough = bsJawOpen > 0.09 || innerOpenPx >= 5;
+    const chromaBoost = mouthOpenEnough ? Math.max(0, pinkFillRatio - 0.12) * 1.45 : 0;
+    const neuralBoost = bsTongue * 3.8; // MediaPipe tongueOut peaks around 0.25-0.45 on real cams!
+    const combinedStrength = Math.min(1, Math.max(neuralBoost, chromaBoost + bsTongue * 1.9));
+
+    const visible = bsTongue > 0.08 || (mouthOpenEnough && pinkFillRatio > 0.26);
+
+    // Estimate tongue tip point in mirrored canvas coordinates
+    const centerLm = { x: (pLeft.x + pRight.x) * 0.5, y: (pTopInner.y + pBotInner.y) * 0.5 };
+    const centerPt = mapPt(centerLm);
+    let tipPt = null;
+    let dirX = 0;
+    let dirY = 0;
+
+    if (visible) {
+      if (sumW > 0.15) {
+        const cxRoi = sumX / sumW;
+        const cyRoi = sumY / sumW;
+        const normX = (sx + (cxRoi / rw) * sw) / vw;
+        const normY = (sy + (cyRoi / rh) * sh) / vh;
+        tipPt = mapPt({ x: normX, y: normY });
+
+        const leftPt = mapPt(pLeft);
+        const rightPt = mapPt(pRight);
+        const halfW = Math.max(10, Math.abs(rightPt.x - leftPt.x) * 0.5);
+        dirX = Math.max(-1, Math.min(1, (tipPt.x - centerPt.x) / (halfW * 0.55)));
+        dirY = Math.max(-1, Math.min(1, (tipPt.y - centerPt.y) / (halfW * 0.50)));
+      } else {
+        // If neural tongueOut fired before ROI pink pixels locked, anchor dot at center-lower mouth
+        tipPt = { x: centerPt.x, y: centerPt.y + 12 };
+        dirY = 0.35;
+      }
     }
 
-    const cxRoi = sumX / sumW;
-    const cyRoi = sumY / sumW;
-
-    // Convert ROI centroid back to normalized video coordinates, then map to mirrored canvas!
-    const normX = (sx + (cxRoi / rw) * sw) / vw;
-    const normY = (sy + (cyRoi / rh) * sh) / vh;
-    const tipPt = mapPt({ x: normX, y: normY });
-
-    // Direction relative to mouth center in mirrored space (-1 = screen left, +1 = screen right)
-    const centerLm = { x: (pLeft.x + pRight.x) * 0.5, y: (pTop.y + pBot.y) * 0.5 };
-    const centerPt = mapPt(centerLm);
-    const leftPt = mapPt(pLeft);
-    const rightPt = mapPt(pRight);
-    const halfMouthPx = Math.max(12, Math.abs(rightPt.x - leftPt.x) * 0.5);
-
-    const dirX = Math.max(-1, Math.min(1, (tipPt.x - centerPt.x) / (halfMouthPx * 0.72)));
-    const dirY = Math.max(-1, Math.min(1, (tipPt.y - centerPt.y) / (halfMouthPx * 0.65)));
-
     return {
-      visible: bsTongue > 0.16 || (areaRatio > 0.24 && (blendshapes?.jawOpen || 0) > 0.16),
-      strength: Math.min(1, combinedStrength),
+      visible,
+      strength: combinedStrength,
+      pinkFillRatio,
+      upperPink,
+      lowerPink,
       dirX,
       dirY,
       tipPt,
@@ -484,7 +554,6 @@ export class LipTracker {
     this.demoPhase += (dt / 1000) * (isMoving ? 4.8 : 1.3);
     const wave = isMoving ? Math.max(0, Math.sin(this.demoPhase)) : 0;
 
-    // Synthesize exact active oral-motor move in Demo Camera!
     const move = this.settings.practiceMode === 'moves' ? this.settings.targetMove : this.settings.targetShape;
     let openAmt = 0.03;
     let widthScale = 1.0;
@@ -501,6 +570,8 @@ export class LipTracker {
       mouthSmileRight: 0,
       mouthPressLeft: 0,
       mouthPressRight: 0,
+      mouthRollLower: 0,
+      mouthRollUpper: 0,
       tongueOut: 0,
       cheekPuff: 0,
     };
@@ -509,23 +580,23 @@ export class LipTracker {
       if (move === 'kiss' || move === 'round') {
         openAmt = 0.06 + wave * 0.14;
         widthScale = 1.0 - wave * 0.34;
-        synBlendshapes.mouthPucker = wave * 0.85;
-        synBlendshapes.mouthFunnel = wave * 0.55;
+        synBlendshapes.mouthPucker = wave * 0.55;
+        synBlendshapes.mouthFunnel = wave * 0.45;
       } else if (move === 'smile') {
         openAmt = 0.04 + wave * 0.12;
         widthScale = 1.0 + wave * 0.28;
-        synBlendshapes.mouthSmileLeft = wave * 0.85;
-        synBlendshapes.mouthSmileRight = wave * 0.85;
+        synBlendshapes.mouthSmileLeft = wave * 0.7;
+        synBlendshapes.mouthSmileRight = wave * 0.7;
       } else if (move === 'cheekPuff') {
         openAmt = 0.01;
         widthScale = 0.90;
         cheekPuffAmt = wave;
-        synBlendshapes.cheekPuff = wave * 0.9;
+        synBlendshapes.cheekPuff = wave * 0.35;
       } else if (move === 'tongueOut' || move === 'tongueWiggle' || move === 'tongueUp' || move === 'tongueDown') {
         openAmt = 0.06 + wave * 0.24;
         tongueOutAmt = wave;
-        synBlendshapes.jawOpen = wave * 0.45;
-        synBlendshapes.tongueOut = wave * 0.9;
+        synBlendshapes.jawOpen = wave * 0.42;
+        synBlendshapes.tongueOut = wave * 0.35;
         if (move === 'tongueWiggle') {
           tongueDirX = Math.sin(this.demoPhase * 2.1) * 0.85;
           tongueDirY = 0.2;
@@ -539,7 +610,7 @@ export class LipTracker {
       } else {
         openAmt = 0.03 + wave * 0.30;
         widthScale = 1.0 + wave * 0.05;
-        synBlendshapes.jawOpen = wave * 0.82;
+        synBlendshapes.jawOpen = wave * 0.72;
       }
     }
 
@@ -548,13 +619,11 @@ export class LipTracker {
     const faceR = Math.min(cw, ch) * 0.31;
 
     ctx.save();
-    // Shoulders
     ctx.fillStyle = '#475569';
     ctx.beginPath();
     ctx.ellipse(cx, ch * 1.03, faceR * 1.5, faceR * 0.75, 0, Math.PI, 0);
     ctx.fill();
 
-    // Head (widens slightly for cheekPuff)
     const skin = ctx.createRadialGradient(cx - faceR * 0.2, cy - faceR * 0.2, faceR * 0.2, cx, cy, faceR * 1.15);
     skin.addColorStop(0, '#fde2cc');
     skin.addColorStop(1, '#e8b594');
@@ -563,7 +632,6 @@ export class LipTracker {
     ctx.ellipse(cx, cy, faceR * (0.78 + cheekPuffAmt * 0.14), faceR * 0.96, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Rosy puffed cheeks in demo
     if (cheekPuffAmt > 0.15) {
       ctx.fillStyle = `rgba(244, 114, 140, ${cheekPuffAmt * 0.35})`;
       ctx.beginPath();
@@ -572,13 +640,11 @@ export class LipTracker {
       ctx.fill();
     }
 
-    // Hair
     ctx.fillStyle = '#3b2417';
     ctx.beginPath();
     ctx.ellipse(cx, cy - faceR * 0.36, faceR * 0.80, faceR * 0.65, 0, Math.PI, Math.PI * 2);
     ctx.fill();
 
-    // Eyes
     ctx.fillStyle = '#1e293b';
     ctx.beginPath();
     ctx.arc(cx - faceR * 0.28, cy - faceR * 0.12, faceR * 0.065, 0, Math.PI * 2);
@@ -590,7 +656,6 @@ export class LipTracker {
     ctx.arc(cx + faceR * 0.26, cy - faceR * 0.14, faceR * 0.022, 0, Math.PI * 2);
     ctx.fill();
 
-    // Synthetic mouth + protruding tongue in Demo Camera
     const mouthY = cy + faceR * 0.36;
     const mouthW = faceR * 0.34 * widthScale;
     const innerH = faceR * openAmt * 1.15;
@@ -622,18 +687,20 @@ export class LipTracker {
     }
     ctx.restore();
 
-    const landmarks = this._buildSyntheticLandmarks(cx, cy, faceR, openAmt, widthScale, cw, ch);
+    const landmarks = this._buildSyntheticLandmarks(cx, cy, faceR, openAmt, widthScale, cheekPuffAmt, cw, ch);
     const identityMapper = (lm) => ({ x: lm.x * cw, y: lm.y * ch });
     const tongueInfo = {
-      visible: tongueOutAmt > 0.18,
+      visible: tongueOutAmt > 0.15,
       strength: tongueOutAmt,
+      pinkFillRatio: tongueOutAmt * 0.75,
+      upperPink: tongueDirY < 0 ? tongueOutAmt * 0.8 : 0.1,
+      lowerPink: tongueDirY >= 0 ? tongueOutAmt * 0.8 : 0.1,
       dirX: tongueDirX,
       dirY: tongueDirY,
       tipPt: demoTipPt,
     };
     this._evaluateAndDrawLandmarks(landmarks, identityMapper, ts, dt, synBlendshapes, tongueInfo);
 
-    // DPR-aware Demo badge
     const dpr = cw / Math.max(1, this.canvasEl.clientWidth);
     ctx.save();
     ctx.fillStyle = 'rgba(37, 99, 235, 0.88)';
@@ -648,19 +715,26 @@ export class LipTracker {
     ctx.restore();
   }
 
-  _buildSyntheticLandmarks(cx, cy, faceR, openAmt, widthScale, cw, ch) {
+  _buildSyntheticLandmarks(cx, cy, faceR, openAmt, widthScale, cheekPuffAmt, cw, ch) {
     const lms = {};
-    const put = (idx, x, y) => {
-      lms[idx] = { x: x / cw, y: y / ch };
+    const put = (idx, x, y, z = 0) => {
+      lms[idx] = { x: x / cw, y: y / ch, z };
     };
 
     const eyeSpan = faceR * 0.62;
-    put(33, cx - eyeSpan * 0.5, cy - faceR * 0.12);
-    put(263, cx + eyeSpan * 0.5, cy - faceR * 0.12);
-    put(1, cx, cy + faceR * 0.08);
-    put(152, cx, cy + faceR * 0.94);
-    put(234, cx - faceR * 0.78, cy + faceR * 0.15);
-    put(454, cx + faceR * 0.78, cy + faceR * 0.15);
+    put(33, cx - eyeSpan * 0.5, cy - faceR * 0.12, 0);
+    put(263, cx + eyeSpan * 0.5, cy - faceR * 0.12, 0);
+    put(1, cx, cy + faceR * 0.08, -0.05);
+    put(152, cx, cy + faceR * 0.94, 0);
+    put(234, cx - faceR * (0.78 + cheekPuffAmt * 0.12), cy + faceR * 0.15, 0);
+    put(454, cx + faceR * (0.78 + cheekPuffAmt * 0.12), cy + faceR * 0.15, 0);
+
+    LEFT_CHEEK_IDX.forEach((idx) => {
+      put(idx, cx - faceR * (0.55 + cheekPuffAmt * 0.14), cy + faceR * 0.24, -cheekPuffAmt * 0.04);
+    });
+    RIGHT_CHEEK_IDX.forEach((idx) => {
+      put(idx, cx + faceR * (0.55 + cheekPuffAmt * 0.14), cy + faceR * 0.24, -cheekPuffAmt * 0.04);
+    });
 
     const mx = cx;
     const my = cy + faceR * 0.36;
@@ -708,9 +782,29 @@ export class LipTracker {
   }
 
   _getThreshold() {
-    // Sensitivity 1..10 -> threshold 0.68 (strict) down to 0.22 (very gentle)
+    // Calibrated real-webcam thresholds: Sensitivity 6/10 -> 0.34 (friendly & responsive!)
+    // Sensitivity 1 (strict) = 0.59, Sensitivity 10 (very gentle) = 0.14
     const s = Math.max(1, Math.min(10, Number(this.settings.sensitivity) || 6));
-    return 0.72 - s * 0.05;
+    return 0.64 - s * 0.05;
+  }
+
+  _computeCheekMetrics(landmarks, mapPt, eyeDist) {
+    const lc = LEFT_CHEEK_IDX.map((i) => landmarks[i]).filter(Boolean);
+    const rc = RIGHT_CHEEK_IDX.map((i) => landmarks[i]).filter(Boolean);
+    const nose = landmarks[1];
+    if (lc.length === 0 || rc.length === 0 || !nose) {
+      return { cheekSpan: this.baseline.cheekSpan, cheekBulgeZ: 0 };
+    }
+    const lAvg = lc.reduce((acc, p) => ({ x: acc.x + p.x / lc.length, y: acc.y + p.y / lc.length, z: acc.z + (p.z || 0) / lc.length }), { x: 0, y: 0, z: 0 });
+    const rAvg = rc.reduce((acc, p) => ({ x: acc.x + p.x / rc.length, y: acc.y + p.y / rc.length, z: acc.z + (p.z || 0) / rc.length }), { x: 0, y: 0, z: 0 });
+
+    const ml = mapPt(lAvg);
+    const mr = mapPt(rAvg);
+    const cheekSpan = Math.hypot(mr.x - ml.x, mr.y - ml.y) / eyeDist;
+    // Forward Z-bulge of cheeks relative to eye plane (more negative Z = closer to camera!)
+    const eyeZ = ((landmarks[33]?.z || 0) + (landmarks[263]?.z || 0)) * 0.5;
+    const cheekBulgeZ = eyeZ - (lAvg.z + rAvg.z) * 0.5;
+    return { cheekSpan, cheekBulgeZ };
   }
 
   _evaluateAndDrawLandmarks(landmarks, mapPt, ts, dt, blendshapes = null, tongueInfo = null) {
@@ -743,36 +837,39 @@ export class LipTracker {
       : openness + 0.14;
     const width = Math.hypot(mRightCorner.x - mLeftCorner.x, mRightCorner.y - mLeftCorner.y) / eyeDist;
 
+    const { cheekSpan, cheekBulgeZ } = this._computeCheekMetrics(landmarks, mapPt, eyeDist);
+
     const faceCx = (pLeftEye.x + pRightEye.x) * 0.5;
     const faceCy = (pLeftEye.y + pRightEye.y) * 0.5;
     const headJump = Math.hypot(faceCx - this.prevMetrics.cx, faceCy - this.prevMetrics.cy);
 
     if (!this.baseline.ready) {
-      this.baseline.openness = this.baseline.samples === 0
-        ? openness
-        : this.baseline.openness * 0.8 + openness * 0.2;
-      this.baseline.outerH = this.baseline.samples === 0
-        ? outerH
-        : this.baseline.outerH * 0.8 + outerH * 0.2;
-      this.baseline.width = this.baseline.samples === 0
-        ? width
-        : this.baseline.width * 0.8 + width * 0.2;
+      const a = this.baseline.samples === 0 ? 1 : 0.25;
+      this.baseline.openness = this.baseline.openness * (1 - a) + openness * a;
+      this.baseline.outerH = this.baseline.outerH * (1 - a) + outerH * a;
+      this.baseline.width = this.baseline.width * (1 - a) + width * a;
+      this.baseline.cheekSpan = this.baseline.cheekSpan * (1 - a) + cheekSpan * a;
+      this.baseline.cheekBulgeZ = this.baseline.cheekBulgeZ * (1 - a) + cheekBulgeZ * a;
       this.baseline.samples++;
       if (this.baseline.samples >= 6) {
         this.baseline.ready = true;
       }
-    } else if (headJump < 0.02 && Math.abs(openness - this.baseline.openness) < 0.04) {
-      this.baseline.openness = this.baseline.openness * 0.988 + openness * 0.012;
-      this.baseline.outerH = this.baseline.outerH * 0.988 + outerH * 0.012;
-      this.baseline.width = this.baseline.width * 0.988 + width * 0.012;
+    } else if (headJump < 0.02 && Math.abs(openness - this.baseline.openness) < 0.035 && (blendshapes?.cheekPuff || 0) < 0.04) {
+      this.baseline.openness = this.baseline.openness * 0.99 + openness * 0.01;
+      this.baseline.outerH = this.baseline.outerH * 0.99 + outerH * 0.01;
+      this.baseline.width = this.baseline.width * 0.99 + width * 0.01;
+      this.baseline.cheekSpan = this.baseline.cheekSpan * 0.992 + cheekSpan * 0.008;
+      this.baseline.cheekBulgeZ = this.baseline.cheekBulgeZ * 0.992 + cheekBulgeZ * 0.008;
     }
 
     const openDelta = Math.max(0, openness - this.baseline.openness);
-    const pressDelta = Math.max(0, this.baseline.openness - openness) * 1.4 +
-      Math.max(0, this.baseline.outerH - outerH) * 1.1;
+    const pressDelta = Math.max(0, this.baseline.openness - openness) * 1.5 +
+      Math.max(0, this.baseline.outerH - outerH) * 1.4;
     const widthChange = width - this.baseline.width;
     const absWidthDelta = Math.abs(widthChange);
     const vel = Math.abs(openness - this.prevMetrics.openness) + Math.abs(width - this.prevMetrics.width) * 0.6;
+    const cheekSpanDelta = Math.max(0, cheekSpan - this.baseline.cheekSpan);
+    const cheekBulgeDelta = Math.max(0, cheekBulgeZ - this.baseline.cheekBulgeZ);
 
     this.prevMetrics = { openness, width, cx: faceCx, cy: faceCy };
 
@@ -780,21 +877,27 @@ export class LipTracker {
     const bsPucker = blendshapes?.mouthPucker || 0;
     const bsFunnel = blendshapes?.mouthFunnel || 0;
     const bsPress = ((blendshapes?.mouthPressLeft || 0) + (blendshapes?.mouthPressRight || 0)) * 0.5;
+    const bsRoll = ((blendshapes?.mouthRollUpper || 0) + (blendshapes?.mouthRollLower || 0)) * 0.5;
     const bsSmile = ((blendshapes?.mouthSmileLeft || 0) + (blendshapes?.mouthSmileRight || 0)) * 0.5;
+    const bsStretch = ((blendshapes?.mouthStretchLeft || 0) + (blendshapes?.mouthStretchRight || 0)) * 0.5;
     const bsCheekPuff = blendshapes?.cheekPuff || 0;
     const bsTongueOut = blendshapes?.tongueOut || 0;
-    const tongueStrength = Math.max(bsTongueOut, tongueInfo?.strength || 0);
+    const bsMouthLat = Math.abs((blendshapes?.mouthLeft || 0) - (blendshapes?.mouthRight || 0));
+    const bsUpperUp = ((blendshapes?.mouthUpperUpLeft || 0) + (blendshapes?.mouthUpperUpRight || 0)) * 0.5;
+    const bsLowerDown = ((blendshapes?.mouthLowerDownLeft || 0) + (blendshapes?.mouthLowerDownRight || 0)) * 0.5;
 
-    if (pressDelta > 0.03 || bsPress > 0.20 || openness < 0.035) {
+    const tongueStrength = Math.max(bsTongueOut * 3.8, tongueInfo?.strength || 0);
+
+    if (pressDelta > 0.025 || bsPress > 0.14 || bsRoll > 0.14 || openness < 0.032) {
       this.sawClosedBeforeOpen = true;
     }
 
-    // Track tongue lateral sweep for Tongue Wiggle
-    if (tongueInfo?.visible || bsTongueOut > 0.16) {
-      const dx = tongueInfo?.dirX || 0;
+    // Track horizontal sweep for Tongue Wiggle (both tongue centroid AND lateral mouth/jaw shift!)
+    if (tongueInfo?.visible || bsTongueOut > 0.06 || bsMouthLat > 0.12) {
+      const dx = (tongueInfo?.dirX || 0) + ((blendshapes?.mouthRight || 0) - (blendshapes?.mouthLeft || 0)) * 0.8;
       this.tongueWiggleMinX = Math.min(this.tongueWiggleMinX, dx);
       this.tongueWiggleMaxX = Math.max(this.tongueWiggleMaxX, dx);
-      this.tongueWiggleDecay = 1200;
+      this.tongueWiggleDecay = 1600;
     } else {
       this.tongueWiggleDecay = Math.max(0, this.tongueWiggleDecay - dt);
       if (this.tongueWiggleDecay === 0) {
@@ -803,75 +906,92 @@ export class LipTracker {
       }
     }
 
+    // Combined calibrated Cheek Puff score (neural cheekPuff + landmark expansion + closed lips!)
+    const lipsClosedFactor = bsJawOpen < 0.12 ? 1.0 : 0.35;
+    const cheekPuffScore = Math.min(
+      1,
+      Math.max(
+        bsCheekPuff * 4.8,
+        (bsCheekPuff * 2.8 + cheekSpanDelta * 6.5 + cheekBulgeDelta * 18.0 + (bsPress + bsPucker) * 0.25) * lipsClosedFactor
+      )
+    );
+
     // Compute normalized Match / Effort Score (0..1)
     let rawScore = 0;
-    let metricTag = `Open ${Math.min(100, Math.round(Math.max(openDelta * 320, bsJawOpen * 130)))}%`;
+    let metricTag = `Open ${Math.min(100, Math.round(Math.max(openDelta * 320, bsJawOpen * 140)))}%`;
 
-    if (headJump < 0.07) {
+    if (headJump < 0.08) {
       if (this.settings.practiceMode === 'moves') {
         const move = this.settings.targetMove;
         if (move === 'openWide') {
-          rawScore = Math.max(openDelta * 4.2, bsJawOpen * 1.55);
+          rawScore = Math.max(openDelta * 4.8, bsJawOpen * 2.0);
           metricTag = `Open ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'kiss') {
-          const narrowScore = widthChange < -0.02 ? Math.abs(widthChange) * 5.2 : 0;
-          rawScore = Math.max(narrowScore, bsPucker * 1.45 + bsFunnel * 0.45);
+          const narrowScore = widthChange < -0.018 ? Math.abs(widthChange) * 6.8 : 0;
+          rawScore = Math.max(narrowScore, bsPucker * 2.1 + bsFunnel * 0.9);
           metricTag = `Kiss ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'smile') {
-          const wideScore = widthChange > 0.025 ? widthChange * 4.8 : 0;
-          rawScore = Math.max(wideScore, bsSmile * 1.45);
+          const wideScore = widthChange > 0.02 ? widthChange * 5.8 : 0;
+          rawScore = Math.max(wideScore, bsSmile * 1.9 + bsStretch * 0.6);
           metricTag = `Smile ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'lipPop') {
-          const popBonus = this.sawClosedBeforeOpen && (openDelta > 0.05 || bsJawOpen > 0.16) ? 0.35 : 0;
-          rawScore = Math.max(openDelta * 3.5, bsJawOpen * 1.15) + pressDelta * 2.2 + bsPress * 0.75 + popBonus;
+          const pressEffort = pressDelta * 3.0 + bsPress * 2.1 + bsRoll * 1.6;
+          const popBonus = this.sawClosedBeforeOpen && (openDelta > 0.045 || bsJawOpen > 0.15) ? 0.55 : 0;
+          rawScore = Math.max(pressEffort, popBonus + openDelta * 2.6);
           metricTag = `Pop ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'tongueOut') {
-          rawScore = Math.max(bsTongueOut * 1.65, tongueStrength * 1.25);
+          rawScore = tongueStrength;
           metricTag = `Tongue ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'tongueWiggle') {
           const sweep = this.tongueWiggleMaxX - this.tongueWiggleMinX;
-          rawScore = Math.max(bsTongueOut * 1.2, tongueStrength * 0.85) + Math.min(0.45, sweep * 0.7);
+          rawScore = tongueStrength * 0.72 + Math.min(0.6, sweep * 0.85) + bsMouthLat * 0.75;
           metricTag = `Wiggle ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'tongueUp') {
-          const upBoost = tongueInfo?.visible && tongueInfo.dirY < -0.1 ? Math.abs(tongueInfo.dirY) * 0.55 : 0;
-          rawScore = Math.max(bsTongueOut * 1.45, tongueStrength * 1.1) + upBoost;
+          const upBoost =
+            (tongueInfo?.visible && tongueInfo.dirY < 0.08 ? 0.35 + Math.abs(Math.min(0, tongueInfo.dirY)) * 0.6 : 0) +
+            (tongueInfo?.upperPink || 0) * 0.55 +
+            bsUpperUp * 0.65;
+          rawScore = Math.max(tongueStrength * 0.9, tongueStrength * 0.6 + upBoost);
           metricTag = `Up ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'tongueDown') {
-          const downBoost = tongueInfo?.visible && tongueInfo.dirY > 0.12 ? tongueInfo.dirY * 0.55 : 0;
-          rawScore = Math.max(bsTongueOut * 1.45, tongueStrength * 1.1) + downBoost;
+          const downBoost =
+            (tongueInfo?.visible && tongueInfo.dirY > 0.05 ? 0.35 + tongueInfo.dirY * 0.55 : 0) +
+            (tongueInfo?.lowerPink || 0) * 0.55 +
+            bsLowerDown * 0.65;
+          rawScore = Math.max(tongueStrength * 0.9, tongueStrength * 0.6 + downBoost);
           metricTag = `Down ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else if (move === 'cheekPuff') {
-          rawScore = bsCheekPuff * 1.65;
-          metricTag = `Puff ${Math.min(100, Math.round(rawScore * 100))}%`;
+          rawScore = cheekPuffScore;
+          metricTag = `Cheeks ${Math.min(100, Math.round(rawScore * 100))}%`;
         } else {
-          rawScore = Math.max(openDelta * 4.0, bsJawOpen * 1.4, bsTongueOut * 1.4);
+          rawScore = Math.max(openDelta * 4.2, bsJawOpen * 1.6, tongueStrength);
         }
       } else {
         // WORDS MODE
         if (this.settings.detectionMode === 'match') {
           const shape = this.settings.targetShape;
           if (shape === 'round') {
-            const roundBoost = (widthChange < -0.02 ? Math.abs(widthChange) * 4.2 : 0) + (bsPucker + bsFunnel) * 0.65;
-            rawScore = Math.max(openDelta * 3.0, bsJawOpen * 1.1) + roundBoost;
+            const roundBoost = (widthChange < -0.02 ? Math.abs(widthChange) * 5.0 : 0) + (bsPucker + bsFunnel) * 1.1;
+            rawScore = Math.max(openDelta * 3.0, bsJawOpen * 1.2) + roundBoost;
           } else if (shape === 'smile') {
-            const smileBoost = (widthChange > 0.02 ? widthChange * 4.4 : 0) + bsSmile * 0.7;
-            rawScore = Math.max(openDelta * 2.2, bsJawOpen * 0.85) + smileBoost;
+            const smileBoost = (widthChange > 0.02 ? widthChange * 4.8 : 0) + bsSmile * 1.2;
+            rawScore = Math.max(openDelta * 2.2, bsJawOpen * 0.9) + smileBoost;
           } else if (shape === 'bilabial') {
-            const cycleBoost = this.sawClosedBeforeOpen && (openDelta > 0.045 || bsJawOpen > 0.14) ? 0.25 : 0;
-            rawScore = Math.max(openDelta * 3.8, bsJawOpen * 1.3) + pressDelta * 2.2 + bsPress * 0.6 + cycleBoost;
+            const cycleBoost = this.sawClosedBeforeOpen && (openDelta > 0.045 || bsJawOpen > 0.14) ? 0.32 : 0;
+            rawScore = Math.max(openDelta * 4.0, bsJawOpen * 1.5) + pressDelta * 2.5 + bsPress * 1.2 + cycleBoost;
           } else {
-            rawScore = Math.max(openDelta * 4.4, bsJawOpen * 1.6);
+            rawScore = Math.max(openDelta * 4.6, bsJawOpen * 1.8);
           }
         } else {
-          const geoScore = openDelta * 4.2 + pressDelta * 2.2 + absWidthDelta * 2.2 + Math.min(0.18, vel * 1.8);
-          const bsScore = bsJawOpen * 1.55 + (bsPucker + bsFunnel) * 0.65 + bsPress * 0.7 + bsSmile * 0.45;
+          const geoScore = openDelta * 4.5 + pressDelta * 2.4 + absWidthDelta * 2.6 + Math.min(0.2, vel * 2.0);
+          const bsScore = bsJawOpen * 1.8 + (bsPucker + bsFunnel) * 1.0 + bsPress * 1.1 + bsSmile * 0.7;
           rawScore = Math.max(geoScore, bsScore);
         }
       }
     }
 
     rawScore = Math.max(0, Math.min(1, rawScore));
-    this.smoothScore = this.smoothScore * 0.55 + rawScore * 0.45;
+    this.smoothScore = this.smoothScore * 0.52 + rawScore * 0.48;
 
     const threshold = this._getThreshold();
     const cooldownMs = (Number(this.settings.cooldownSec) || 2.6) * 1000;
@@ -881,11 +1001,11 @@ export class LipTracker {
     let visualState = 'tracking';
     if (isRewardGlow) {
       visualState = 'reward';
-    } else if (this.smoothScore >= threshold * 0.6) {
+    } else if (this.smoothScore >= threshold * 0.58) {
       visualState = 'moving';
     }
 
-    const requiredHoldMs = this.settings.practiceMode === 'moves' ? 210 : 165;
+    const requiredHoldMs = this.settings.practiceMode === 'moves' ? 175 : 155;
     if (!inCooldown && this.smoothScore >= threshold) {
       this.activeHoldMs += dt;
       if (this.activeHoldMs >= requiredHoldMs) {
@@ -902,6 +1022,7 @@ export class LipTracker {
           openness,
           width,
           tongueOut: tongueStrength,
+          cheekPuff: cheekPuffScore,
         });
       }
     } else {
@@ -916,20 +1037,20 @@ export class LipTracker {
     }
 
     const holdProgress = Math.min(1, this.activeHoldMs / requiredHoldMs);
-    this._drawTrackingOverlay(landmarks, mapPt, visualState, metricTag, tongueInfo, bsCheekPuff, holdProgress);
+    this._drawTrackingOverlay(landmarks, mapPt, visualState, metricTag, tongueInfo, cheekPuffScore, holdProgress);
 
     this.onMetrics({
       faceFound: true,
       score: this.smoothScore,
       threshold,
       metricTag,
-      openPct: Math.min(100, Math.round(Math.max(openDelta * 320, bsJawOpen * 130))),
+      openPct: Math.min(100, Math.round(Math.max(openDelta * 320, bsJawOpen * 140))),
       state: visualState,
       inCooldown,
     });
   }
 
-  _drawTrackingOverlay(landmarks, mapPt, state, metricTag, tongueInfo, cheekPuff, holdProgress) {
+  _drawTrackingOverlay(landmarks, mapPt, state, metricTag, tongueInfo, cheekPuffScore, holdProgress) {
     const ctx = this.ctx;
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const style = this.settings.lineStyle || 'clean';
@@ -955,7 +1076,6 @@ export class LipTracker {
 
     ctx.save();
 
-    // 1. Optional Detailed Mesh
     if (style === 'detailed') {
       const jawPts = JAW_LINE.map((i) => landmarks[i]).filter(Boolean).map(mapPt);
       if (jawPts.length > 2) {
@@ -965,7 +1085,6 @@ export class LipTracker {
         jawPts.forEach((pt, idx) => (idx === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
         ctx.stroke();
       }
-
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
       ctx.lineWidth = 1.2 * dpr;
       const n = Math.min(outerPts.length, innerPts.length);
@@ -977,7 +1096,6 @@ export class LipTracker {
       }
     }
 
-    // 2. Soft bounding brackets around mouth area
     if (style !== 'minimal' && outerPts.length > 4) {
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       outerPts.forEach((p) => {
@@ -1001,7 +1119,6 @@ export class LipTracker {
       ctx.stroke();
     }
 
-    // 3. Translucent Inner Lip Cavity
     if (innerPts.length > 3) {
       ctx.fillStyle =
         state === 'reward'
@@ -1019,7 +1136,6 @@ export class LipTracker {
       ctx.stroke();
     }
 
-    // 4. Primary Glowing Outer Lip Contour Line
     if (outerPts.length > 3) {
       ctx.save();
       ctx.strokeStyle = mainColor;
@@ -1034,7 +1150,6 @@ export class LipTracker {
       ctx.restore();
     }
 
-    // 5. Horizontal Lip-Width Line (Amber)
     if (style !== 'minimal') {
       ctx.strokeStyle = '#fbbf24';
       ctx.lineWidth = 2.2 * dpr;
@@ -1046,7 +1161,6 @@ export class LipTracker {
       ctx.setLineDash([]);
     }
 
-    // 6. Vertical Lip-Opening Line (Mint)
     ctx.strokeStyle = '#34d399';
     ctx.lineWidth = 3 * dpr;
     ctx.setLineDash([5 * dpr, 4 * dpr]);
@@ -1056,13 +1170,12 @@ export class LipTracker {
     ctx.stroke();
     ctx.setLineDash([]);
 
-    // 7. Anchor Dots
     this._drawDot(ctx, leftCorner.x, leftCorner.y, 4.5 * dpr, '#fbbf24', dpr);
     this._drawDot(ctx, rightCorner.x, rightCorner.y, 4.5 * dpr, '#fbbf24', dpr);
     this._drawDot(ctx, topInner.x, topInner.y, 4.5 * dpr, '#34d399', dpr);
     this._drawDot(ctx, botInner.x, botInner.y, 4.5 * dpr, '#34d399', dpr);
 
-    // 8. LIVE TONGUE TRACKING LINE & GLOWING MAGENTA DOT!
+    // LIVE TONGUE TRACKING LINE & GLOWING MAGENTA DOT
     if (tongueInfo?.visible && tongueInfo.tipPt) {
       ctx.save();
       ctx.strokeStyle = '#ec4899';
@@ -1077,26 +1190,31 @@ export class LipTracker {
       ctx.restore();
     }
 
-    // 9. LIVE PUFFED CHEEK ARCS (when puffing cheeks!)
-    if ((cheekPuff > 0.2 || (this.settings.practiceMode === 'moves' && this.settings.targetMove === 'cheekPuff')) && landmarks[234] && landmarks[454]) {
-      const leftCheek = mapPt(landmarks[234]);
-      const rightCheek = mapPt(landmarks[454]);
-      const alpha = Math.min(0.95, 0.25 + cheekPuff * 1.1);
+    // LIVE PUFFED CHEEK ARCS (tracked on mid-cheek landmarks 187 & 411!)
+    const showCheekGuides =
+      cheekPuffScore > 0.18 || (this.settings.practiceMode === 'moves' && this.settings.targetMove === 'cheekPuff');
+    if (showCheekGuides && landmarks[187] && landmarks[411]) {
+      const cA = mapPt(landmarks[187]);
+      const cB = mapPt(landmarks[411]);
+      const leftPt = cA.x < cB.x ? cA : cB;
+      const rightPt = cA.x < cB.x ? cB : cA;
+      const alpha = Math.min(0.95, 0.3 + cheekPuffScore * 0.9);
       ctx.save();
-      ctx.strokeStyle = `rgba(236, 72, 153, ${alpha})`;
-      ctx.lineWidth = (2.5 + cheekPuff * 2.5) * dpr;
+      ctx.strokeStyle = cheekPuffScore > 0.35 ? `rgba(16, 185, 129, ${alpha})` : `rgba(236, 72, 153, ${alpha})`;
+      ctx.lineWidth = (2.8 + cheekPuffScore * 2.6) * dpr;
       ctx.lineCap = 'round';
-      const r = (22 + cheekPuff * 12) * dpr;
+      const r = (22 + cheekPuffScore * 14) * dpr;
       ctx.beginPath();
-      ctx.arc(leftCheek.x, mouthCy - 8 * dpr, r, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.arc(leftPt.x - 10 * dpr, leftPt.y, r, Math.PI * 0.65, Math.PI * 1.35);
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(rightCheek.x, mouthCy - 8 * dpr, r, Math.PI * 0.65, Math.PI * 1.35);
+      ctx.arc(rightPt.x + 10 * dpr, rightPt.y, r, -Math.PI * 0.35, Math.PI * 0.35);
       ctx.stroke();
+      this._drawDot(ctx, leftPt.x, leftPt.y, 4 * dpr, '#ec4899', dpr);
+      this._drawDot(ctx, rightPt.x, rightPt.y, 4 * dpr, '#ec4899', dpr);
       ctx.restore();
     }
 
-    // 10. Hold-to-Match Glowing Arc around mouth when getting close to match!
     if (holdProgress > 0.05) {
       const ringR = Math.max(36 * dpr, Math.abs(rightCorner.x - leftCorner.x) * 0.85);
       ctx.save();
@@ -1109,8 +1227,7 @@ export class LipTracker {
       ctx.restore();
     }
 
-    // 11. Live Metric Pill Next to Mouth
-    if (style !== 'minimal' && (state === 'moving' || state === 'reward' || tongueInfo?.visible)) {
+    if (style !== 'minimal' && (state === 'moving' || state === 'reward' || tongueInfo?.visible || cheekPuffScore > 0.25)) {
       const pillX = Math.max(leftCorner.x, rightCorner.x) + 18 * dpr;
       const pillY = mouthCy;
       ctx.font = `800 ${12 * dpr}px Nunito, sans-serif`;
@@ -1119,7 +1236,7 @@ export class LipTracker {
       const bh = 24 * dpr;
 
       if (pillX + bw < this.canvasEl.width - 8) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.8)';
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.82)';
         ctx.beginPath();
         ctx.roundRect(pillX, pillY - bh / 2, bw, bh, 12 * dpr);
         ctx.fill();

@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/styles.css?v=5">
 </head>
 <body>
   <div class="app-shell" id="appShell">
@@ -62,6 +62,11 @@
         <button class="pill-btn calm-toggle" id="calmModeQuickBtn" type="button" aria-pressed="false" title="Sensory-friendly calm mode">
           <span class="btn-emoji">🌙</span>
           <span class="btn-label">Calm</span>
+        </button>
+
+        <button class="pill-btn" id="aboutResearchBtn" type="button" title="About Emma's Voice &amp; Research">
+          <span class="btn-emoji">ℹ️</span>
+          <span class="btn-label">About</span>
         </button>
 
         <button class="pill-btn parent-btn" id="parentSettingsBtn" type="button" title="Parent & Therapist Settings">
@@ -491,6 +496,50 @@
     </div>
   </div>
 
-  <script type="module" src="js/app.js?v=4"></script>
+  <!-- About & Research Modal -->
+  <div class="modal-backdrop hidden" id="aboutModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <div>
+          <h2 id="aboutModalTitle">About Emma's Voice &amp; Research</h2>
+          <p class="modal-subtitle">How it works, privacy guarantees, and related scientific papers</p>
+        </div>
+        <button class="close-btn" id="closeAboutModalBtn" type="button" aria-label="Close about">✕</button>
+      </div>
+      <div class="modal-body about-modal-body">
+        <div class="about-callout">
+          🔒 <strong>100% Private &amp; On-Device:</strong> Camera lip/tongue tracking, local neural AI voice, and parent-recorded videos stay privately on this tablet and are never uploaded.
+        </div>
+
+        <div class="about-section">
+          <h3>Related Scientific Research</h3>
+          <div class="research-item">
+            <strong>Drimalla et al. (2021) — <em>Molecular Autism</em></strong>
+            <p>Computer-vision study showing autistic individuals can imitate modeled facial and mouth movements when explicitly demonstrated, benefiting from slower pacing—inspiring our <strong>0.5× Slow Coach</strong> and generous hold windows.</p>
+          </div>
+          <div class="research-item">
+            <strong>JEMImE &amp; LIFEisGAME (ASD Serious Games)</strong>
+            <p>Webcam-driven games where children with ASD copy on-screen expressive avatars with live visual match gauges and joyful reinforcement.</p>
+          </div>
+          <div class="research-item">
+            <strong>CAMI-2D / CAMI-2DNet (Kennedy Krieger &amp; NTU)</strong>
+            <p>Demonstrated single-2D-webcam automated motor imitation assessment in autism without specialized depth sensors or markers.</p>
+          </div>
+          <div class="research-item">
+            <strong>LAOLA &amp; ORAR Oral-Motor Therapy Platforms</strong>
+            <p>Combined MediaPipe Face Mesh (478 lip/jaw/cheek landmarks) with cropped mouth-ROI tongue detection to track tongue and cheek exercises non-invasively.</p>
+          </div>
+        </div>
+
+        <div class="about-clinical-note">
+          <strong>Clinical Note:</strong> Playful lip, tongue, and cheek moves build imitation, body awareness, and joint attention, and work best alongside functional speech/AAC practice and a licensed Speech-Language Pathologist (SLP)—which is why <strong>Moves Mode</strong> sits right next to <strong>Words Mode</strong>.
+        </div>
+
+        <a class="primary-cta full-width" href="about.html" style="text-decoration:none">📖 Open Full About &amp; Research Page</a>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/app.js?v=5"></script>
 </body>
 </html>

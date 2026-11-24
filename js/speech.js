@@ -5,12 +5,12 @@
 const VITS_CDN = 'https://cdn.jsdelivr.net/npm/@diffusionstudio/vits-web/+esm';
 
 export const NEURAL_VOICES = [
-  { id: 'en_US-amy-medium', label: 'Amy — Warm & Gentle (US English)', lang: 'en-US' },
-  { id: 'en_US-kristin-medium', label: 'Kristin — Bright & Friendly (US English)', lang: 'en-US' },
+  { id: 'en_US-kristin-medium', label: 'Kristin — Bright & Cheerful (US English)', lang: 'en-US' },
+  { id: 'en_GB-jenny_dioco-medium', label: 'Jenny — Warm & Lively (UK English)', lang: 'en-GB' },
+  { id: 'en_GB-cori-medium', label: 'Cori — Expressive & Friendly (UK English)', lang: 'en-GB' },
   { id: 'en_US-hfc_female-medium', label: 'Hannah — Clear Studio (US English)', lang: 'en-US' },
   { id: 'en_US-lessac-medium', label: 'Lessac — Crisp Articulation (US English)', lang: 'en-US' },
-  { id: 'en_GB-jenny_dioco-medium', label: 'Jenny — Warm British (UK English)', lang: 'en-GB' },
-  { id: 'en_GB-cori-medium', label: 'Cori — Expressive British (UK English)', lang: 'en-GB' },
+  { id: 'en_US-amy-medium', label: 'Amy — Soft & Calm (US English)', lang: 'en-US' },
   { id: 'es_ES-sharvard-medium', label: 'Sharvard — Natural Spanish (Spain)', lang: 'es-ES' },
   { id: 'es_MX-ald-medium', label: 'Ald — Natural Spanish (LatAm)', lang: 'es-MX' },
   { id: 'pt_BR-faber-medium', label: 'Faber — Natural Portuguese (Brazil)', lang: 'pt-BR' },
@@ -18,7 +18,7 @@ export const NEURAL_VOICES = [
 ];
 
 const DEFAULT_NEURAL_BY_LANG = {
-  'en-US': 'en_US-amy-medium',
+  'en-US': 'en_US-kristin-medium',
   'en-GB': 'en_GB-jenny_dioco-medium',
   'es-ES': 'es_ES-sharvard-medium',
   'es-MX': 'es_MX-ald-medium',
@@ -32,9 +32,9 @@ export class SpeechEngine {
     this.voices = [];
     this.language = 'en-US';
     this.voiceEngine = 'neural'; // 'neural' | 'browser'
-    this.neuralVoiceId = 'en_US-amy-medium';
+    this.neuralVoiceId = 'en_US-kristin-medium';
     this.voiceURI = '';
-    this.rate = 0.92;
+    this.rate = 1.04;
     this.chimeEnabled = true;
     this.praiseEnabled = false;
     this.calmMode = false;
@@ -216,8 +216,9 @@ export class SpeechEngine {
     }
 
     this._speakText(text, {
-      delayMs: this.chimeEnabled ? 230 : 0,
-      playbackRate: Math.min(1.06, Math.max(0.86, this.rate + 0.04)),
+      delayMs: this.chimeEnabled ? 210 : 0,
+      playbackRate: this.calmMode ? 1.0 : Math.min(1.14, Math.max(1.04, this.rate + 0.04)),
+      brightenPitch: !this.calmMode,
     });
   }
 
@@ -239,12 +240,13 @@ export class SpeechEngine {
     }
 
     const playbackRate = slow
-      ? Math.max(0.74, this.rate * 0.82)
-      : Math.max(0.82, Math.min(1.12, this.rate));
+      ? Math.max(0.84, this.rate * 0.84)
+      : Math.max(0.96, Math.min(1.15, this.rate));
 
     this._speakText(text, {
-      delayMs: isReward && this.chimeEnabled ? 190 : 0,
+      delayMs: isReward && this.chimeEnabled ? 180 : 0,
       playbackRate,
+      brightenPitch: isReward && !this.calmMode,
     });
   }
 
@@ -267,7 +269,7 @@ export class SpeechEngine {
     }
   }
 
-  _speakText(text, { delayMs = 0, playbackRate = 0.92 } = {}) {
+  _speakText(text, { delayMs = 0, playbackRate = 1.04, brightenPitch = false } = {}) {
     const seq = ++this._speakSeq;
     const useNeural =
       this.voiceEngine === 'neural' &&
@@ -284,10 +286,12 @@ export class SpeechEngine {
           const url = await this._synthesizeNeuralCached(text, this.neuralVoiceId, seq);
           if (!url || seq !== this._speakSeq) return;
           const audio = new Audio(url);
-          audio.preservesPitch = true;
-          audio.mozPreservesPitch = true;
-          audio.webkitPreservesPitch = true;
-          audio.playbackRate = playbackRate;
+          // Slight natural brightness (+4% warmth) during joyful celebrations so it never sounds sleepy/sad
+          const keepPitch = !brightenPitch;
+          audio.preservesPitch = keepPitch;
+          audio.mozPreservesPitch = keepPitch;
+          audio.webkitPreservesPitch = keepPitch;
+          audio.playbackRate = brightenPitch ? Math.min(1.09, Math.max(1.04, playbackRate)) : playbackRate;
           audio.volume = 1.0;
           this.currentAudio = audio;
           await audio.play();
@@ -297,7 +301,6 @@ export class SpeechEngine {
         }
       }
 
-      // Seamless fallback to best available browser voice
       this._speakBrowserFallback(text, playbackRate);
     };
 

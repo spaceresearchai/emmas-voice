@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>About &amp; Research — Emma's Voice</title>
+  <link rel="icon" type="image/svg+xml" href="assets/icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #eef4fb;
+      --surface: #ffffff;
+      --soft: #f7faff;
+      --border: #dce6f4;
+      --text: #182538;
+      --muted: #53657d;
+      --primary: #2563eb;
+      --mint: #10b981;
+      --pink: #ec4899;
+      --amber: #f59e0b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at top left, #f5f9ff 0%, var(--bg) 60%, #e7f0fb 100%);
+      line-height: 1.6;
+      padding: 24px 16px 60px;
+    }
+    .container {
+      max-width: 880px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .nav-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 18px;
+      border-radius: 999px;
+      background: var(--primary);
+      color: #ffffff;
+      text-decoration: none;
+      font-weight: 900;
+      box-shadow: 0 6px 18px rgba(37, 99, 235, 0.25);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 999px;
+      background: #ecfdf5;
+      color: #047857;
+      border: 1.5px solid #a7f3d0;
+      font-size: 0.85rem;
+      font-weight: 800;
+    }
+    .card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 24px;
+      padding: 26px 28px;
+      box-shadow: 0 10px 30px rgba(24, 37, 56, 0.07);
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+    h2 {
+      margin: 0 0 12px;
+      font-size: 1.32rem;
+      font-weight: 900;
+      color: var(--text);
+    }
+    h3 {
+      margin: 0 0 6px;
+      font-size: 1.04rem;
+      font-weight: 900;
+      color: #1d4ed8;
+    }
+    p {
+      margin: 0 0 12px;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin-top: 10px;
+    }
+    .mini-box {
+      background: var(--soft);
+      border: 1.5px solid var(--border);
+      border-radius: 18px;
+      padding: 16px 18px;
+    }
+    .paper-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .paper-card {
+      background: var(--soft);
+      border: 1.5px solid var(--border);
+      border-left: 5px solid var(--primary);
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
+    .paper-card.tongue { border-left-color: var(--pink); }
+    .paper-card.clinical { border-left-color: var(--mint); }
+    .paper-meta {
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: #64748b;
+      margin-bottom: 6px;
+    }
+    .paper-links {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 8px;
+    }
+    .paper-links a {
+      font-size: 0.84rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-decoration: none;
+      background: #eff6ff;
+      padding: 4px 11px;
+      border-radius: 999px;
+      border: 1px solid #bfdbfe;
+    }
+    .callout {
+      background: #fffbeb;
+      border: 1.5px solid #fde68a;
+      border-radius: 18px;
+      padding: 16px 18px;
+      color: #92400e;
+      font-weight: 700;
+    }
+    .callout strong { color: #78350f; }
+    .tech-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .tech-pill {
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1e40af;
+      font-size: 0.84rem;
+      font-weight: 800;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <nav class="nav-bar">
+      <a class="back-link" href="./">← Back to Emma's Voice</a>
+      <span class="badge">🔒 100% On-Device &amp; Private</span>
+    </nav>
+
+    <section class="card">
+      <h1>About Emma's Voice &amp; Related Research</h1>
+      <p>
+        <strong>Emma's Voice</strong> is a calm, sensory-friendly tablet web app created to help non-verbal autistic children practice playful <strong>lip, tongue, and cheek imitation</strong> first, and then bridge those oral-motor movements into <strong>early spoken words</strong> through immediate visual and vocal reinforcement.
+      </p>
+      <div class="grid-2">
+        <div class="mini-box">
+          <h3>👅 Stage 1: Moves Mode</h3>
+          <p style="margin:0">Enlarged, animated lips, tongue, and cheek demonstrations with directional guide arrows. When the tablet camera detects a match, the child receives an instant musical fanfare, joyful voice cheer, and confetti celebration.</p>
+        </div>
+        <div class="mini-box">
+          <h3>💬 Stage 2: Words Mode</h3>
+          <p style="margin:0">High-motivation early speech words (<em>Mama, More, Water, Bubbles, Open…</em>) with syllable-by-syllable animation, parent video recording, and immediate spoken modeling whenever her lips move.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Related Scientific Research &amp; Clinical Systems</h2>
+      <p>
+        Our architecture draws from peer-reviewed research in autism motor imitation, computer-vision serious games, and non-invasive webcam oral-motor biofeedback:
+      </p>
+
+      <div class="paper-list">
+        <article class="paper-card">
+          <h3>1. Facial Expression &amp; Mouth Imitation in Autism via Computer Vision</h3>
+          <div class="paper-meta">Drimalla et al. (2021) — Molecular Autism (PubMed / NIH)</div>
+          <p>
+            Used automated facial analysis to measure how individuals with autism imitate modeled expressions compared to neurotypical controls. Key finding: autistic participants <strong>can accurately imitate modeled facial and mouth movements when explicitly shown</strong>, though their movements tend to be slower and benefit from gentle pacing. This directly informed our <strong>0.5× Slow Coach</strong>, forgiving hold windows, and customizable sensitivity slider.
+          </p>
+          <div class="paper-links">
+            <a href="https://scholar.google.com/scholar?q=Drimalla+2021+Imitation+and+recognition+of+facial+emotions+in+autism+computer+vision" target="_blank" rel="noopener">Search on Google Scholar ↗</a>
+          </div>
+        </article>
+
+        <article class="paper-card">
+          <h3>2. JEMImE &amp; LIFEisGAME — Serious Games for Autism Facial Imitation</h3>
+          <div class="paper-meta">Serious Games &amp; HCI Autism Interventions (JMIR / IEEE / ResearchGate)</div>
+          <p>
+            <strong>JEMImE</strong> and <strong>LIFEisGAME</strong> pioneered webcam-driven serious games where children with ASD copy on-screen expressive avatars while real-time computer vision gauges reward closer approximations—demonstrating improved engagement and imitation accuracy compared to static flashcard drills.
+          </p>
+          <div class="paper-links">
+            <a href="https://scholar.google.com/scholar?q=JEMImE+serious+game+autism+facial+expression+imitation" target="_blank" rel="noopener">Search JEMImE ↗</a>
+            <a href="https://scholar.google.com/scholar?q=LIFEisGAME+autism+facial+expression+avatar" target="_blank" rel="noopener">Search LIFEisGAME ↗</a>
+          </div>
+        </article>
+
+        <article class="paper-card">
+          <h3>3. CAMI-2D / CAMI-2DNet — Single-Webcam Motor Imitation Assessment</h3>
+          <div class="paper-meta">Kennedy Krieger Institute &amp; Nottingham Trent University (arXiv / Clinical Pilots)</div>
+          <p>
+            Demonstrated that an ordinary 2D front-facing camera (with no depth sensors or wearable markers) can reliably quantify children's motor imitation while copying an on-screen visual model in under a minute.
+          </p>
+          <div class="paper-links">
+            <a href="https://scholar.google.com/scholar?q=CAMI-2DNet+Computerized+Assessment+of+Motor+Imitation+autism" target="_blank" rel="noopener">Search CAMI-2DNet ↗</a>
+          </div>
+        </article>
+
+        <article class="paper-card tongue">
+          <h3>4. LAOLA &amp; ORAR — MediaPipe + Hybrid Mouth-ROI Tongue Tracking</h3>
+          <div class="paper-meta">Speech &amp; Oral-Motor Rehabilitation Research (PolyU / SCITEPRESS / MDPI)</div>
+          <p>
+            Recent oral-motor therapy platforms (such as <strong>LAOLA</strong> and <strong>ORAR</strong>) highlight a core technical limitation: Google MediaPipe Face Mesh provides 478 accurate lip, jaw, and cheek landmarks plus blendshapes, but <strong>lacks direct 3D tongue landmarks</strong>. To solve this without invasive sensors, modern systems combine MediaPipe with a cropped mouth-cavity vision detector. Emma's Voice uses this exact hybrid design—combining MediaPipe blendshapes (<code>tongueOut</code>, <code>cheekPuff</code>, <code>jawOpen</code>, <code>mouthPucker</code>) with a real-time inner-mouth pink-tongue chroma tracker and 3D cheek-bulge expansion tracking.
+          </p>
+          <div class="paper-links">
+            <a href="https://scholar.google.com/scholar?q=MediaPipe+oral+motor+rehabilitation+tongue+tracking+ORAR+LAOLA" target="_blank" rel="noopener">Search Oral-Motor Vision Papers ↗</a>
+          </div>
+        </article>
+
+        <article class="paper-card clinical">
+          <h3>5. Smart-Mirror Biofeedback &amp; Clinical Speech-Language Guidance</h3>
+          <div class="paper-meta">Pediatric Speech Sound Disorders &amp; Evidence-Based SLP Practice</div>
+          <p>
+            Systematic reviews of gamified speech and oral-motor apps show that non-punitive "smart mirror" visual biofeedback (rewarding effort without red-X failure cues) boosts children's joint attention, turn-taking, and willingness to practice at home.
+          </p>
+        </article>
+      </div>
+    </section>
+
+    <section class="callout">
+      <strong>Important Clinical Note for Parents &amp; Therapists:</strong>
+      Speech-Language Pathology (SLP) evidence (including ASHA guidance) notes that non-speech oral-motor exercises (like tongue wiggles or cheek puffs) are wonderful for <em>playful imitation, body awareness, and joint attention</em>, but on their own do not replace functional communication or speech-sound practice. That is why Emma's Voice pairs <strong>Moves Mode</strong> directly alongside <strong>Words Mode</strong>—and works best as a joyful home companion alongside a licensed Speech-Language Pathologist and your child's preferred AAC / communication system.
+    </section>
+
+    <section class="card">
+      <h2>Privacy &amp; On-Device Architecture</h2>
+      <p>
+        Everything runs 100% inside the tablet browser. No webcam video, facial landmarks, or parent-recorded videos ever leave the device.
+      </p>
+      <div class="tech-pills">
+        <span class="tech-pill">MediaPipe Face Landmarker (Local WASM/WebGL)</span>
+        <span class="tech-pill">Hybrid Inner-Mouth Tongue Chroma Tracker</span>
+        <span class="tech-pill">3D Cheek-Expansion Puff Detector</span>
+        <span class="tech-pill">Piper VITS Local Neural AI Voice (WASM)</span>
+        <span class="tech-pill">IndexedDB Private Video Storage</span>
+      </div>
+    </section>
+  </div>
+</body>
+</html>
